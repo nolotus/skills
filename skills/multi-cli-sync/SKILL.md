@@ -17,17 +17,14 @@ It uses **zero dependencies**, relying entirely on native Bash (`.sh`) for Mac/L
 
 When the user types `/setup-sync`, act as their **Personal Workflow Assistant** and follow these steps exactly:
 
-#### 1. OS & Target Detection
-Ask the user (in Chinese):
-> "为了帮你配置**零依赖**的全平台同步流，请告诉我：
-> 1. 你当前使用的是什么操作系统？(Windows 还是 Mac/Linux？这决定了我生成 Bash 还是 PowerShell 脚本)
-> 2. 你的项目根目录需要生成哪些 AI 的入口指令？(例如 `AGENTS.md`, `CLAUDE.md`, `.cursorrules` 等)
-> 3. 你的全局技能存放在哪里？(例如 Codex 的 `~/.codex/skills/`，如果不需要全局同步可以跳过此项。)"
+#### 1. Auto-Detect Environment & Targets
+Do NOT ask the user for their OS. Use your environment access (e.g., running `uname`, checking `sys.platform`, or inspecting env vars) to automatically detect if they are on Windows or Mac/Linux.
 
-#### 2. Wait for Confirmation
-Stop execution and wait for the user to reply.
+Do NOT ask the user for their CLI global directories if you can detect them. Proactively check the user's home directory (e.g., `ls -a ~`) for common AI CLI config folders like `~/.codex/`, `~/.claude/`, `~/.gemini/`, etc. Automatically configure the sync targets based on what you find.
 
-#### 3. Determine the Tech Stack
+Only ask the user questions if their setup is highly customized or if you encounter permission errors preventing auto-detection.
+
+#### 2. Determine the Tech Stack
 Based on the user's OS:
 - If Windows: Use the `.ps1` templates.
 - If Mac/Linux: Use the `.sh` templates.
