@@ -1,21 +1,37 @@
 # Nolotus Skills Collection
 
-Welcome to my personal AI Skills repository! 
+A public collection of reusable skills for AI coding agents.
 
-This repository contains a curated collection of powerful, reusable Markdown skills that I've developed to supercharge AI coding agents (like Claude Code, Codex, Gemini, and Cursor).
+These skills are written to be portable across projects and tools. The default assumption is:
 
-## What's Inside?
+- core skills live here
+- repo-specific adapters stay in each project
+- private workflows, secrets, product semantics, and local absolute paths do not belong in these public skills
 
-### 1. `multi-cli-sync` (Cross-CLI Skill Sync & Drift Check)
-**The Problem**: If you use multiple AI assistants (e.g., Claude Code in the terminal, Codex in the editor, and Gemini), they each have their own global skill directories (like `~/.codex/skills/`). Keeping your personal custom skills synchronized across all of them—and ensuring you don't accidentally edit them in one place and forget to sync them back—is a nightmare.
+## Design Principles
 
-**The Solution**: The `multi-cli-sync` skill provides a **zero-dependency, pure Bash** solution. By feeding this skill to your AI agent, you can type `/setup-sync` to instantly configure a robust, centralized `my-skills/` directory in your project. It generates lightweight `.sh` scripts to automatically distribute your skills to all CLIs and check for drift.
+- Portable first: skills should work outside Nolotus projects by default.
+- Adapter-friendly: if a project needs local conventions, add a repo-specific adapter there instead of hard-coding it here.
+- Minimal assumptions: do not assume one editor, one CLI, one operating system, or one repo layout unless the skill is explicitly about that.
+- Public-safe: do not include secrets, private endpoints, internal account details, or product-only maintenance rules.
 
-*(More skills will be added soon!)*
+## Skills
 
-## How to Use These Skills
-To use any skill in this repository:
-1. Navigate to the specific skill's folder (e.g., `skills/multi-cli-sync/`).
-2. Copy the `SKILL.md` file.
-3. Provide it to your AI Agent as instructions or context.
-4. Follow the usage commands defined in that skill (e.g., `/setup-sync`).
+### `multi-cli-sync`
+Use when a user wants one source of truth for personal skills and entry guidance, then needs to sync them across Codex, Claude, Gemini, or other local CLI agents.
+
+### `hidden-assumptions-preflight`
+Use before implementation when maintenance path, ownership, editable source of truth, or operational workflow matters more than the immediate visible output.
+
+### `improve-codebase-architecture`
+Use when reviewing a codebase for refactoring, seam design, module depth, and opportunities to improve testability and navigability without binding the advice to one company or repo.
+
+## Usage
+
+Install or copy a skill folder into the target agent's skill directory, or point your agent tooling at this repository if it supports remote skills.
+
+When adapting a public skill for one repository:
+
+1. keep the public core here
+2. put repo-specific guidance in that repository
+3. avoid making the public skill depend on private files or product language
