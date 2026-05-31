@@ -1,0 +1,65 @@
+{
+  "generatedBy": "scripts/multi-cli-sync/generate-guidance.ts",
+  "requiredSources": [
+    "docs/agent-guidance/workflow.md"
+  ],
+  "sharedSections": {
+    "readFirst": {
+      "heading": "先读这些",
+      "orderedItems": [
+        "`docs/agent-guidance/workflow.md` — 跨代理共享工作流原则。",
+        "任务相关的 repo 文档或 skill 源文件。"
+      ]
+    },
+    "driftRule": {
+      "heading": "漂移规则",
+      "items": [
+        "不要把大段指令直接复制进这个文件。",
+        "先更新权威源文档和 `scripts/multi-cli-sync/guidance.config.json`，再运行 `bun scripts/multi-cli-sync/generate-guidance.ts`。",
+        "用 `bun scripts/multi-cli-sync/generate-guidance.ts --check` 和 `bash scripts/multi-cli-sync/check.sh` 做校验。"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "path": "AGENTS.md",
+      "title": "Agent Workspace Instructions",
+      "intro": "这个文件是本仓库编码代理使用的薄入口。",
+      "sections": [
+        {
+          "ref": "readFirst"
+        },
+        {
+          "heading": "工具说明",
+          "items": [
+            "供 Codex、Copilot coding agent/CLI，以及其他支持 AGENTS.md 的代理使用。",
+            "优先遵循当前激活的 system/developer instructions，其次才是这些仓库说明。"
+          ]
+        },
+        {
+          "ref": "driftRule"
+        }
+      ]
+    },
+    {
+      "path": "CLAUDE.md",
+      "title": "Claude Workspace Instructions",
+      "intro": "这个文件是本仓库编码代理使用的薄入口。",
+      "sections": [
+        {
+          "ref": "readFirst"
+        },
+        {
+          "heading": "工具说明",
+          "items": [
+            "供 Claude Code 及兼容 Claude 的编码工作流使用。",
+            "优先遵循 Claude 当前激活的 system/developer instructions，其次才是这些仓库说明。"
+          ]
+        },
+        {
+          "ref": "driftRule"
+        }
+      ]
+    }
+  ]
+}

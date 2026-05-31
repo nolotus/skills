@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# multi-cli-sync.config.sh - 多 CLI skill 同步与 repo mirror gate 配置
+# config.sh - 多 CLI skill 同步与 repo mirror gate 配置
 
 # 个人 skill 源目录
 PERSONAL_SOURCE_DIR="my-skills"

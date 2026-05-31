@@ -4,7 +4,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_FILE="$SCRIPT_DIR/multi-cli-sync.config.sh"
+CONFIG_FILE="$SCRIPT_DIR/config.sh"
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "❌ 错误：缺少配置文件 $CONFIG_FILE"

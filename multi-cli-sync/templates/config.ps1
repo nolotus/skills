@@ -1,4 +1,4 @@
-# multi-cli-sync.config.ps1 - 多 CLI skill 同步与 repo mirror gate 配置
+# config.ps1 - 多 CLI skill 同步与 repo mirror gate 配置
 
 $PersonalSourceDir = "my-skills"
 

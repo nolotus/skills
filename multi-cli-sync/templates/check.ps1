@@ -2,7 +2,7 @@
 
 $ErrorActionPreference = "Continue"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ConfigFile = Join-Path $ScriptDir "multi-cli-sync.config.ps1"
+$ConfigFile = Join-Path $ScriptDir "config.ps1"
 
 if (-Not (Test-Path -Path $ConfigFile)) {
     Write-Host "❌ 错误：缺少配置文件 $ConfigFile" -ForegroundColor Red

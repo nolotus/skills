@@ -80,7 +80,7 @@ description: 当用户想把个人 skill 在多个 AI CLI 之间同步，并为 
 
 创建这些目录：
 
-- `mkdir -p docs/agent-guidance my-skills scripts`
+- `mkdir -p docs/agent-guidance my-skills scripts/multi-cli-sync`
 
 #### 3. 建立中心真值文档
 
@@ -88,14 +88,23 @@ description: 当用户想把个人 skill 在多个 AI CLI 之间同步，并为 
 
 #### 4. 生成并部署脚本
 
-读取本 skill 仓库里 `templates/` 下的模板，并把它们写入用户当前工作区：
+读取本 skill 仓库里 `templates/` 下的模板，并把它们写入用户当前工作区。
 
-1. 配置文件：`scripts/multi-cli-sync.config.sh` 或 `.ps1`
+推荐 Bun/Node 项目使用配置驱动的 TypeScript generator：
+
+1. `templates/generate-guidance.ts` -> `scripts/multi-cli-sync/generate-guidance.ts`
+2. `templates/guidance.config.json` -> `scripts/multi-cli-sync/guidance.config.json`
+
+这个 generator 必须保持通用：仓库专属文案、入口文件列表、必需源文件、漂移规则都写进 `guidance.config.json`，不要写死在脚本里。
+
+零依赖 fallback 使用 shell 或 PowerShell 模板：
+
+1. 配置文件：`scripts/multi-cli-sync/config.sh` 或 `.ps1`
    - 写入个人 skill 源布局、目标布局、目标目录
    - 写入 repo mirror 规则
-2. Guidance 同步脚本：`scripts/generate-guidance.sh` 或 `.ps1`
-3. 全局同步脚本：`scripts/sync.sh` 或 `.ps1`
-4. 漂移检查脚本：`scripts/check.sh` 或 `.ps1`
+2. Guidance 同步脚本：`scripts/multi-cli-sync/generate-guidance.sh` 或 `.ps1`
+3. 全局同步脚本：`scripts/multi-cli-sync/sync.sh` 或 `.ps1`
+4. 漂移检查脚本：`scripts/multi-cli-sync/check.sh` 或 `.ps1`
 
 如果拿不到模板文件，就自己用原生命令生成等价脚本。
 
@@ -111,13 +120,17 @@ description: 当用户想把个人 skill 在多个 AI CLI 之间同步，并为 
 
 典型例子：
 
-- `workspace-skill|file-to-file|docs/skills/bun-nolo-workspace.md|$HOME/.codex/skills/bun-nolo-workspace/SKILL.md|1`
-- `agent-workflows|file-to-file|docs/skills/bun-nolo-workspace-agent-dialog-workflows.md|$HOME/.codex/skills/bun-nolo-workspace/references/agent-dialog-workflows.md|1`
+- `workspace-skill|file-to-file|docs/skills/workspace.md|$HOME/.codex/skills/workspace/SKILL.md|1`
+- `skill-reference|file-to-file|docs/skills/workspace-reference.md|$HOME/.codex/skills/workspace/references/reference.md|1`
 - `external-reference|dir-to-dir|vendor/skills/debugging|$HOME/.codex/skills/debugging|0`
 
 #### 6. 执行初始化
 
-立刻运行 guidance 生成脚本，先把根目录入口文件生成出来。
+立刻运行 guidance 生成脚本，先把根目录入口文件生成出来：
+
+- Bun/Node 项目：`bun scripts/multi-cli-sync/generate-guidance.ts`
+- Mac/Linux fallback：`bash scripts/multi-cli-sync/generate-guidance.sh`
+- Windows fallback：`pwsh scripts/multi-cli-sync/generate-guidance.ps1`
 
 #### 7. 告诉用户怎么用
 
@@ -128,3 +141,4 @@ description: 当用户想把个人 skill 在多个 AI CLI 之间同步，并为 
 - 如果 `REPO_MIRROR_WRITE_OK=1`，`sync` 还可以写入 repo mirror 目标
 - 如果只想把 repo mirror 当 gate，不想自动覆盖目标文件，就保持 `REPO_MIRROR_WRITE_OK=0`
 - 如果要改全局规则，必须改中心文档和配置文件，不要直接手改入口文件或镜像副本
+- 如果某个仓库需要 repo-specific guidance，保持 `generate-guidance.ts` 通用，把专属内容放到 `guidance.config.json`
