@@ -1,37 +1,35 @@
-# Nolotus Skills Collection
+# Nolotus Skills
 
-A public collection of reusable skills for AI coding agents.
+这是一个公开的 AI 编码技能仓库。
 
-These skills are written to be portable across projects and tools. The default assumption is:
+设计原则只有三条：
 
-- core skills live here
-- repo-specific adapters stay in each project
-- private workflows, secrets, product semantics, and local absolute paths do not belong in these public skills
+- 通用核心 skill 放这里
+- 仓库私有适配留在各自项目里
+- 默认中文书写；其他用户安装后，优先由他们的代理按本地语言再翻译或生成适配版本
 
-## Design Principles
+## 如何选择安装
 
-- Portable first: skills should work outside Nolotus projects by default.
-- Adapter-friendly: if a project needs local conventions, add a repo-specific adapter there instead of hard-coding it here.
-- Minimal assumptions: do not assume one editor, one CLI, one operating system, or one repo layout unless the skill is explicitly about that.
-- Public-safe: do not include secrets, private endpoints, internal account details, or product-only maintenance rules.
+不是所有 skill 都要装。推荐按需安装：
 
-## Skills
+- 如果你想统一管理个人 skill、同步到 Codex / Claude / Gemini 等多个 CLI，安装 `multi-cli-sync/`
+- 如果你经常做 CMS、后台、自动化、内容系统、可编辑配置类工作，安装 `hidden-assumptions-preflight/`
+- 如果你经常做架构评审、模块边界整理、重构方向判断，安装 `improve-codebase-architecture/`
 
-### `multi-cli-sync`
-Use when a user wants one source of truth for personal skills and entry guidance, then needs to sync them across Codex, Claude, Gemini, or other local CLI agents.
+安装步骤见 [INSTALL.md](INSTALL.md)。
 
-### `hidden-assumptions-preflight`
-Use before implementation when maintenance path, ownership, editable source of truth, or operational workflow matters more than the immediate visible output.
+## 仓库结构
 
-### `improve-codebase-architecture`
-Use when reviewing a codebase for refactoring, seam design, module depth, and opportunities to improve testability and navigability without binding the advice to one company or repo.
+每个顶层目录就是一个独立 skill：
 
-## Usage
+- `multi-cli-sync/`
+- `hidden-assumptions-preflight/`
+- `improve-codebase-architecture/`
 
-Install or copy a skill folder into the target agent's skill directory, or point your agent tooling at this repository if it supports remote skills.
+每个 skill 至少包含一个 `SKILL.md`。
 
-When adapting a public skill for one repository:
+## 语言策略
 
-1. keep the public core here
-2. put repo-specific guidance in that repository
-3. avoid making the public skill depend on private files or product language
+- 仓库内内容优先中文
+- 面向公开复用时，尽量避免写死 Nolotus 私有路径、私有产品语义、账号信息、内部流程
+- 如果其他用户的工作语言不是中文，推荐他们在安装时让代理先翻译一份，再放进自己的 skill 目录
