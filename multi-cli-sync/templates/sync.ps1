@@ -111,7 +111,11 @@ function Sync-RepoMirrors {
         $target = $spec.Target
 
         if (-Not (Test-Path -Path $source)) {
-            throw "源路径不存在，无法同步 $label: $source"
+            if ($spec.Required) {
+                throw "required mirror 源路径不存在，无法同步 $label: $source"
+            }
+            Write-Host "  ⚠️ 跳过 optional mirror $label（源路径不存在: $source）" -ForegroundColor Yellow
+            continue
         }
 
         if ($kind -eq "file-to-file" -or $kind -eq "dir-to-dir") {

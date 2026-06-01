@@ -99,8 +99,12 @@ sync_repo_mirrors() {
     for spec in "${REPO_MIRROR_SPECS[@]}"; do
         IFS='|' read -r label kind source target required <<< "$spec"
         if [ ! -e "$source" ]; then
-            echo "❌ 源路径不存在，无法同步 $label: $source"
-            exit 1
+            if [ "$required" = "1" ]; then
+                echo "❌ required mirror 源路径不存在，无法同步 $label: $source"
+                exit 1
+            fi
+            echo "  ⚠️ 跳过 optional mirror $label（源路径不存在: $source）"
+            continue
         fi
         if [ "$kind" = "file-to-file" ] || [ "$kind" = "dir-to-dir" ]; then
             copy_pair "$source" "$target"
