@@ -15,6 +15,7 @@
 - 如果你想统一管理个人 skill、同步到 Codex / Claude / Gemini 等多个 CLI，安装 `multi-cli-sync/`
 - 如果你经常做 CMS、后台、自动化、内容系统、可编辑配置类工作，安装 `hidden-assumptions-preflight/`
 - 如果你经常做架构评审、模块边界整理、重构方向判断，安装 `improve-codebase-architecture/`
+- 如果你是 nolo-cli 用户，需要编码代理中自动获得 CLI 操作指导，安装 `nolo-cli/`
 
 安装步骤见 [INSTALL.md](INSTALL.md)。
 
@@ -25,6 +26,7 @@
 - `multi-cli-sync/`
 - `hidden-assumptions-preflight/`
 - `improve-codebase-architecture/`
+- `nolo-cli/`
 
 每个 skill 至少包含一个 `SKILL.md`。
 

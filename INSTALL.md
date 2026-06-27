@@ -9,6 +9,7 @@
 - 需要多 CLI 同步和漂移检查：安装 `multi-cli-sync/`
 - 需要做实现前的维护路径预检：安装 `hidden-assumptions-preflight/`
 - 需要做架构改进和模块边界评审：安装 `improve-codebase-architecture/`
+- 需要 nolo CLI 操作指导：安装 `nolo-cli/`
 
 ## 目录约定
 
