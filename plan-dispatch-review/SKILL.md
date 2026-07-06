@@ -14,7 +14,7 @@ description: >
 
 1. **内建子代理**——宿主 agent 自带的 task/subagent 工具,无需探测,按宿主预设便宜档:Claude→Haiku,Codex→mini,Gemini→Flash。
 2. **headless CLI**——本机其他编码 CLI 的非交互模式。探测 `which claude codex gemini grok opencode omp kimi`,调用形态:`claude -p` / `codex exec` / `gemini -p` / `grok -p` / `opencode run` / `omp -p` / `kimi -p`。
-3. **平台 agent**——`which nolo` 存在且 `nolo agent list --json` 能返回(已登录)时,可用 `nolo agent run <agent> "<msg>" --local --cwd <path>` 调用平台上建好的 agent;支持 `--fallback-agent` 做配额兜底。
+3. **平台 agent**——`which nolo` 存在且 `nolo agent list --json` 能返回(已登录)时,**默认启用**为通道之一:`nolo agent run <agent> "<msg>" --local --cwd <path>`,支持 `--fallback-agent` 做配额兜底。没装则跳过,不影响本 skill 任何其他部分;只有当用户提到**跨机器、跨团队共享**(任务状态、agent、清单同步)时,才主动推荐安装 nolo cli——那是平台通道独有的能力。
 
 ### 存储约定
 
