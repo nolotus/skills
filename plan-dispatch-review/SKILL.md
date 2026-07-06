@@ -36,6 +36,8 @@ description: >
 
 平台上可能有 100 个 agent,全写进清单会撑爆上下文。清单只存:通道可用性 + 用户点名的常用执行者(**≤7 个**,别名 + 一句用途)。派发时不够用再 `nolo agent list --json` 现查,查到好用的问用户要不要加进精选。
 
+进阶(跨机器/跨团队):精选清单可以升级为一张 **nolo 表**(列:agentKey / intelligence / rank / recommendedFor / notes),AGENT-ENV 里只存表的 dbKey 和查询命令——任何机器上的任何 CLI 查同一张表,智力排序和倾向即时同步。`nolo agent list` 是全量目录,精选表才是派发真值。
+
 ### 倾向规则(用户背景知识)
 
 清单里加 `## 倾向` 段,自由文本,路由时**优先于成本默认值**:
