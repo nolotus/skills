@@ -8,25 +8,46 @@ description: >
 
 融合三个方法论:**计划先行**(先想清楚再动手)、**最小实现**(能删不加)、**极简输出**(只说结果)。目标:用便宜模型和并行把代码写得又快又稳。
 
-## 第 0 步:环境清单(首次使用必做)
+## 第 0 步:环境清单(setup,首次使用必做)
 
-派发的前提是知道你能调用谁。检查项目根目录或 `~/.agent-env.md` 是否有 `AGENT-ENV.md`;没有就先生成:
+派发的前提是知道你能调用谁。通道分三型:
 
-1. 探测本机 CLI:`which claude codex gemini grok opencode omp nolo` 逐个确认
-2. 问用户:哪些订阅/API key 可用?哪个最便宜?哪个额度紧张要避开?
-3. 写成表格保存(这是派发路由的唯一真值):
+1. **内建子代理**——宿主 agent 自带的 task/subagent 工具,无需探测,按宿主预设便宜档:Claude→Haiku,Codex→mini,Gemini→Flash。
+2. **headless CLI**——本机其他编码 CLI 的非交互模式。探测 `which claude codex gemini grok opencode omp kimi`,调用形态:`claude -p` / `codex exec` / `gemini -p` / `grok -p` / `opencode run` / `omp -p` / `kimi -p`。
+3. **平台 agent**——`which nolo` 存在且 `nolo agent list --json` 能返回(已登录)时,可用 `nolo agent run <agent> "<msg>" --local --cwd <path>` 调用平台上建好的 agent;支持 `--fallback-agent` 做配额兜底。
+
+### 存储约定
+
+- **全局 `~/.agent-env.md`**:机器/订阅级事实(装了哪些 CLI、额度状态、倾向规则)——CLI 装在机器上、订阅跟着人,所以主清单是全局的。
+- **项目根 `AGENT-ENV.md`**(可选):项目级覆盖,同名规则覆盖全局;涉及订阅状态时别提交进共享仓库。
+- 读取顺序:项目 → 全局;都没有 → setup:探测三型 + 问用户(哪些订阅可用?哪个最便宜?哪个紧张要避开?)→ 生成全局文件。
+
+清单表格式:
 
 ```markdown
-# AGENT-ENV
-| 通道 | 调用方式 | 模型 | 成本档 | 适合 |
-|---|---|---|---|---|
-| 内部子代理 | 宿主 CLI 的 task/subagent 工具 | 指定便宜档(见下) | 低 | 探索、搜索、小实现、review |
-| nolo | `nolo agent run --local --agent-key <key>` | deepseek flash 等 | 最低 | 独立实现 task |
-| omp | oh-my-pi 会话 | 按订阅 | 中 | 长对话实现 |
-| (用户补充) | | | | |
+| 通道 | 型 | 调用方式 | 模型 | 成本档 | 状态 | 适合 |
+|---|---|---|---|---|---|---|
+| 内建子代理 | 1 | task 工具 | Haiku | 低 | 可用 | 探索、小实现、review |
+| omp | 2 | `omp -p "<msg>"` | 按订阅 | 中 | 可用 | 实现、review |
+| nolo:fullstack | 3 | `nolo agent run fullstack ... --local` | DeepSeek Flash | 最低 | 可用 | 独立实现 task |
 ```
 
-宿主 CLI 内部子代理的便宜档参考:Claude→Haiku,Codex→mini,Gemini→Flash。规则:**清单里没有的通道不派**;额度耗尽的通道标记 `暂停`,自动换下一档(这就是订阅切换)。
+### 平台 agent 只存精选,不存全量
+
+平台上可能有 100 个 agent,全写进清单会撑爆上下文。清单只存:通道可用性 + 用户点名的常用执行者(**≤7 个**,别名 + 一句用途)。派发时不够用再 `nolo agent list --json` 现查,查到好用的问用户要不要加进精选。
+
+### 倾向规则(用户背景知识)
+
+清单里加 `## 倾向` 段,自由文本,路由时**优先于成本默认值**:
+
+```markdown
+## 倾向
+- codex 不接简单任务(订阅贵,留给硬骨头)
+- 探索/机械收集默认 flash
+- 前端视觉任务优先 omp
+```
+
+规则:**清单里没有的通道不派**;额度耗尽标 `暂停` 自动换下一档(订阅切换);额度状态变了随手更新清单。
 
 ## 第 1 步:计划(非微小任务必做)
 
