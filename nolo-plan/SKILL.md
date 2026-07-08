@@ -23,22 +23,32 @@ description: >
 
 ### 前置:nolo CLI 可用性
 
-`which nolo` 不存在 → 走 setup 引导(见下方 setup 段),不要跳过。nolo 是唯一执行通道,没装就不能派发。
+`which nolo` 不存在 → 走 setup 引导(见下方),不要跳过。nolo 是唯一执行通道,没装就不能派发。
 
-### 查指派表(优先)
+### 查指派表
 
-指派表是一张 nolo table,存用户精选的执行者(列:agentKey / rank / recommendedFor / notes / currentUsage)。skill 不硬编码表 dbKey——从项目根 `.nolo-dispatch.json` 读取:
+指派表是一张 purpose=`agent-dispatch` 的 nolo table,存用户精选的执行者(列:agentKey / rank / recommendedFor / notes / currentUsage)。一条命令发现:
 
-```json
-{
-  "dispatchTable": "meta-0e95801d90-01KVQT279DN09C8D0F6F8SJ9B5",
-  "defaultAgent": "agent-pub-deepseek-v4-flash"
-}
+```bash
+nolo table list --purpose agent-dispatch --json
 ```
 
-有 `.nolo-dispatch.json` → `nolo table query --table <dbKey> --json` 查表,按 rank 选执行者。表里带智力排序、用途、额度状态,是派发真值。
+- **有表** → `nolo table query --table <dbKey> --json` 查行,按 rank 选执行者(见下方智商档位表)。表里带智力排序、用途、额度状态,是派发真值。
+- **没表** → `nolo agent list --json` fallback 全量列表(无 rank/用途),选最便宜可胜任的。同时引导用户建指派表(见 setup)。
 
-没有 `.nolo-dispatch.json` → fallback 到 `nolo agent list --json` 全量列表,选最便宜可胜任的 agent。列表是全量目录,没有 rank 和用途标注——建议用户建指派表(见 setup)。
+### 智商档位选择
+
+查到指派表后,按任务复杂度选 rank 档:
+
+| 智商档 | rank | 适合任务 | 例子 |
+|---|---|---|---|
+| 最低 | 4+ | 机械改动、收集、跑命令 | grep 调用点、改常量、跑测试 |
+| 低 | 3 | 单文件实现、标准模式 | 加一个函数、改 CSS、写测试 |
+| 中 | 2 | 多文件实现、需要设计判断 | 新模块、跨文件重构、API 改动 |
+| 高 | 1 | 架构决策、高风险路径、难 task | 核心算法、安全边界、性能关键 |
+| review | 换家族 | 跨模型 diff 审查 | 用与执行者不同家族的 agent |
+
+**原则**:用能胜任的最低档。低档省钱省时间,高档留给硬骨头。额度标 `暂停` 的跳过,换同档下一个。
 
 ### 超时档位
 
@@ -52,29 +62,24 @@ description: >
 
 超时 ≠ 失败——执行者可能在读文件/跑测试。优先用 `--bg` 后台派发,不阻塞规划者。
 
-### setup(没装 nolo CLI 时)
+### setup
 
+**没装 nolo CLI**:
 1. 安装:`curl -fsSL https://nolo.chat/install | bash`(或见 nolo.chat/docs)
 2. 登录:`nolo auth login`
 3. 验证:`nolo agent list --json` 能返回 agent 列表
-4. 建指派表(可选但推荐):在 nolo 平台建一张 table,加执行者列(agentKey / rank / recommendedFor / notes),在项目根写 `.nolo-dispatch.json` 指向它
 
-## 第 1 步:计划(非微小任务必做)
+**装了但没有指派表**(`nolo table list --purpose agent-dispatch` 返回空):
+1. 建表:`bun scripts/upsertTableMeta.ts --name "Agent Dispatch Matrix" --purpose agent-dispatch`(bun-nolo 项目)或 nolo 平台 UI 建表后设 purpose
+2. 必填列:agentKey(text, primary) / name(text) / rank(number, 1最强) / recommendedFor(text) / currentUsage(text)
+3. 加执行者行:把常用的 agent 填进去,按智力排序设 rank
+4. 验证:`nolo table list --purpose agent-dispatch --json` 能查到
 
 微小豁免:≤2 个文件的机械改动,直接做。其余先写 plan(文件,不是聊天),必含五项:
 
 1. **Task 列表**:每个 task 自包含——目标、涉及文件路径、验收标准。**写 task 描述前先查目标现状**:executor 会忠实执行你的猜测,把猜测写成指令等于亲手注入 bug
 2. **并行分组**:互不依赖的 task 标成一组,同时派发
-3. **执行通道**:每个 task 按复杂度选智商档,从指派表按 rank 匹配:
-
-| 智商档 | rank | 适合任务 | 例子 |
-|---|---|---|---|
-| 最低 | 4+ | 机械改动、收集、跑命令 | grep 调用点、改常量、跑测试 |
-| 低 | 3 | 单文件实现、标准模式 | 加一个函数、改 CSS、写测试 |
-| 中 | 2 | 多文件实现、需要设计判断 | 新模块、跨文件重构、API 改动 |
-| 高 | 1 | 架构决策、高风险路径、难 task | 核心算法、安全边界、性能关键 |
-| review | 换家族 | 跨模型 diff 审查 | 用与执行者不同家族的 agent |
-
+3. **执行通道**:每个 task 按复杂度选智商档,从指派表按 rank 匹配(档位表见第 0 步)
 4. **Review 策略**:见第 3 步分档
 5. **验收证据**:什么产物算完成(diff、测试输出、截图)
 
