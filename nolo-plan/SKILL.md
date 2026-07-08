@@ -70,10 +70,12 @@ nolo table list --purpose agent-dispatch --json
 3. 验证:`nolo agent list --json` 能返回 agent 列表
 
 **装了但没有指派表**(`nolo table list --purpose agent-dispatch` 返回空):
-1. 建表:`bun scripts/upsertTableMeta.ts --name "Agent Dispatch Matrix" --purpose agent-dispatch`(bun-nolo 项目)或 nolo 平台 UI 建表后设 purpose
+1. 建表:在 nolo 平台 UI 建一张 table,设 purpose 为 `agent-dispatch`(或用 `nolo table meta --name "Agent Dispatch Matrix" --purpose agent-dispatch` 如果 CLI 支持)
 2. 必填列:agentKey(text, primary) / name(text) / rank(number, 1最强) / recommendedFor(text) / currentUsage(text)
 3. 加执行者行:把常用的 agent 填进去,按智力排序设 rank
 4. 验证:`nolo table list --purpose agent-dispatch --json` 能查到
+
+## 第 1 步:计划(非微小任务必做)
 
 微小豁免:≤2 个文件的机械改动,直接做。其余先写 plan(文件,不是聊天),必含五项:
 
