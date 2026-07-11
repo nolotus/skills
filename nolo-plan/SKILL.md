@@ -173,6 +173,7 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 - **并行**:能拆就拆,能并就并。plan 把独立文件树拆成无文件重叠的并行 wave,同一 wave 一次全部派出(`--bg`),禁止串行干等。共享热路径(全局 store 一类)不拆给两个 agent 同时改,按包路径切分。
 - **失败契约**:executor 必须报具体 blocker(缺什么文件/权限/信息),禁止静默失败或泛泛"不确定"。
 - 改动多文件时优先隔离 worktree,避免并行 task 互踩。
+- **技能挂载**:任务涉及前端改善/修改/新做 UI 时,派发命令必须带 `--skill page-0e95801d90-01KX89SZ3450YH5R4RG0KP0AES`(ui-design-guidelines,存于 nolo 数据,本地无副本);可叠加多个 `--skill <dbKey|md路径>` 挂其他技能。
 
 派发命令:
 ```bash
