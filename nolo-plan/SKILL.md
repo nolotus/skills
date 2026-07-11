@@ -97,6 +97,13 @@ nolo table list --purpose agent-dispatch --json
 - 每次返工/停杀/失败先分类:`controller_prompt`(任务面/spec 有问题)、`runtime`(OAuth/connector/CLI/timeout)、`model`(在正确 bounded brief 与可用 runtime 下仍判断或交付失败)。观察可以写进任务记录;只有证据隔离到 `model` 时才把性格缺陷写回指派表,禁止用坏 prompt 污染 agent 档案。
 - 衡量执行者「能不能用」的唯一 KPI 是**一次交付率**(带着当前 spec 模板一次通过验收的比率),不是模型名气。
 
+### 速度优先与额度维护
+
+- 选定 rank 档后,同档(或同等胜任)的多个 agent 里优先选实测更快且可用的,不要死绑某一 handle。**智商档 ≠ 速度档**:高智商模型的大块执行吞吐未必更快。
+- 派发前读指派表 `currentUsage`/`notes`;`currentUsage` 以 `暂停` 开头或明确额度耗尽的跳过,换同档下一个。
+- 额度耗尽/runtime 挂时,把原因+日期写回表(`currentUsage`,必要时 `recommendedFor` 加「暂停/恢复后」前缀),避免下个 session 误派。
+- **宿主模型 ≠ nolo 执行通道**:当前对话宿主可用只说明规划者可用;派执行者仍要可用的 `nolo agent run --local` agentKey。
+
 ### 超时档位
 
 派发时必须设 `--timeout-ms`,按任务复杂度选档:
@@ -119,6 +126,19 @@ nolo table list --purpose agent-dispatch --json
 4. 发 stop 前后各查一次 `git diff`/`fileEdits`;若停止边界刚落下 patch,从现有 diff 继续,不得报告「0 edit」或无条件重开覆盖。
 
 到 timeout 但持续有活动时,让 run 自然结束或用更长档位重新派发;不要在原 timeout 一半时凭感觉停杀。
+
+### 进度可见(硬规则)
+
+Owner 必须能不靠问规划者就知道进度;规划者禁止只靠聊天复述。每条 `--bg` 派发都记下 `runId`,验收前用控制面轮询而不是干等:
+
+```bash
+nolo agent ps --json                                # 全部 run
+nolo agent status <runId> --json | --watch          # 单条状态/盯到结束
+nolo agent logs <runId> [--tail 50]                 # 细节
+nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
+```
+
+向用户汇报时带 runId、agentKey、status 和验收证据。长时间无进展(按上面 stall audit 判定)→ `stop` → 拆小或换通道重派,禁止干等问人。
 
 ### setup
 
@@ -147,10 +167,10 @@ nolo table list --purpose agent-dispatch --json
 
 ## 第 2 步:派发
 
-**硬规则:plan 写完 → 实现类 task 必须派发,不许规划者自己 edit。** 强制门的刹车在这里生效。微小豁免/紧急解阻/返工算账后自己修更便宜 = 唯一三种例外,需一句理由。
+**硬规则:plan 写完 → 实现类 task 必须派发,不许规划者自己 edit。** 强制门的刹车在这里生效。微小豁免/紧急解阻/返工算账后自己修更便宜 = 唯一三种例外,需一句理由;例外情形下规划者自己写的 diff 仍受第 3 步「作者回避」约束,必须派另一个 agent review。
 
 - **上下文隔离**:task prompt 必须自包含(文件路径 + 验收标准 + 必要背景),不传聊天历史。省钱且防污染。大上下文用 `--msg-file` 传文件路径。
-- **并行**:同组 task 一次全部派出(`--bg`),不排队。
+- **并行**:能拆就拆,能并就并。plan 把独立文件树拆成无文件重叠的并行 wave,同一 wave 一次全部派出(`--bg`),禁止串行干等。共享热路径(全局 store 一类)不拆给两个 agent 同时改,按包路径切分。
 - **失败契约**:executor 必须报具体 blocker(缺什么文件/权限/信息),禁止静默失败或泛泛"不确定"。
 - 改动多文件时优先隔离 worktree,避免并行 task 互踩。
 
@@ -163,9 +183,11 @@ nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --
 
 不同模型训练数据不同、盲区不同——reviewer 尽量换家族。
 
+**作者回避(硬规则,任何档位)**:diff 的 reviewer 不得是产出该 diff 的同一个 agent。执行者不得自审自己写的代码;规划者走豁免亲自实现的改动,同样必须派另一个 agent(尽量换家族)review,不能自己写完自己审。自审 = 该 review 无效,按未 review 处理。
+
 | 档 | 判定 | Review |
 |---|---|---|
-| 小 | 单 task、≤3 文件 | 派发者自己 review diff |
+| 小 | 单 task、≤3 文件 | 派发者(非作者)review 执行者的 diff |
 | 中 | 多 task 或跨模块 | +1 个不同模型 reviewer |
 | 大 | 架构改动、高风险路径 | 2+ 个不同家族 reviewer 并行 |
 
@@ -181,5 +203,5 @@ nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --
 
 - 不替代宿主 CLI 的权限与安全规则
 - 不覆盖部署/发布(那是项目自己的流程)
-- 指派表是用户资产:不擅自改表内容,只读
+- 指派表是用户资产:默认只读;仅在 owner 提供证据(额度截图/bench 结果/明确要求)或失败写回规则触发时,写回 `currentUsage`/`notes`/`recommendedFor`
 - nolo CLI 细节见 `nolo-cli` skill
