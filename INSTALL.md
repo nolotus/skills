@@ -7,8 +7,7 @@
 先判断你需要哪类能力：
 
 - 需要多 CLI 同步和漂移检查：安装 `multi-cli-sync/`
-- 需要做实现前的维护路径预检：安装 `hidden-assumptions-preflight/`
-- 需要做架构改进和模块边界评审：安装 `improve-codebase-architecture/`
+- 需要最小实现护栏和实现前的维护路径预检：安装 `minimal-implementation-guard/`
 - 需要 nolo CLI 操作指导：安装 `nolo-cli/`
 
 ## 目录约定
@@ -42,8 +41,7 @@
 ## 给不同用户的建议
 
 - 个人用户：从 `multi-cli-sync/` 开始
-- 做网站/CMS/内容系统的人：额外安装 `hidden-assumptions-preflight/`
-- 做重构/架构治理的人：额外安装 `improve-codebase-architecture/`
+- 做网站/CMS/内容系统或重构治理的人：额外安装 `minimal-implementation-guard/`（含隐性假设预检）
 
 ## 不建议做的事
 

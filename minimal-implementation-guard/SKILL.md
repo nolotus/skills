@@ -1,7 +1,7 @@
 ---
 name: minimal-implementation-guard
 description: >
-  当任务提到最简单方案、最小实现、YAGNI、over-engineering、bloat、boilerplate、不必要依赖，或询问能删除什么时使用。Make sure to use this skill for any review pass focused on reducing avoidable complexity. Do NOT use as a substitute for security review, correctness verification, or data integrity checks.
+  当任务提到最简单方案、最小实现、YAGNI、over-engineering、bloat、boilerplate、不必要依赖，或询问能删除什么时使用；也在实现、自动化、接系统或面向用户交付物动工前做隐性假设预检（维护路径、所有权、数据真值可能被快捷实现破坏时）。Make sure to use this skill for any review pass focused on reducing avoidable complexity. Do NOT use as a substitute for security review, correctness verification, or data integrity checks.
 ---
 
 # 最小实现护栏
@@ -19,6 +19,17 @@ Ponytail 风格护栏。它约束实现和 review，但永远不替代项目自�
 5. **已有依赖能做吗？** 先用已安装依赖，再考虑新增依赖。
 6. **现有项目抽象能做吗？** 扩展已有路径，不要新开平行体系。
 7. **最后才写代码：** 写最小、正确、已验证的 diff。
+
+## 隐性假设预检（动工前）
+
+最小实现不等于把背后的真实工作流做坏。编辑文件、安装、部署或提出具体方案前，先在推理里回答；有风险就明确告诉用户：
+
+1. 真正的交付物是什么：演示、原型、内部工具，还是给真实用户的正式产物？
+2. 交付后谁维护、通过什么入口维护（CMS/后台/配置/API/表格/数据库/命令）？
+3. 哪个 source of truth 必须继续保持权威？你的实现会不会绕过、复制、缓存、硬编码或影子化它？
+4. 如果为了快走捷径，未来哪一个真实用户动作会先坏掉？
+
+答案暴露维护或所有权风险时，围绕真实工作流重设计，或先和用户确认取舍。小任务一句话表态即可（「保留现有 source of truth 为权威，只改展示层」）；完成前验证输出确实读自权威数据源，且没有引入第二个未来还得单独维护的编辑入口。
 
 ## 简化的硬边界
 
