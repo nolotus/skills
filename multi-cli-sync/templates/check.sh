@@ -76,9 +76,54 @@ compare_pair() {
     report_result "fail" "$label" "源与目标类型不一致：$source_path -> $target_path" "$required"
 }
 
+is_personal_excluded() {
+    local skill_name="$1"
+    local excluded
+    if [ -z "${PERSONAL_EXCLUDE_SKILLS+x}" ]; then
+        return 1
+    fi
+    for excluded in "${PERSONAL_EXCLUDE_SKILLS[@]+"${PERSONAL_EXCLUDE_SKILLS[@]}"}"; do
+        [ -n "$excluded" ] || continue
+        if [ "$skill_name" = "$excluded" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+check_excluded_personal_skills() {
+    if [ ${#PERSONAL_TARGET_DIRS[@]} -eq 0 ]; then
+        return
+    fi
+    if [ -z "${PERSONAL_EXCLUDE_SKILLS+x}" ] || [ ${#PERSONAL_EXCLUDE_SKILLS[@]} -eq 0 ]; then
+        return
+    fi
+
+    echo "🧹 检查已排除 skill 是否仍被安装..."
+    local skill_name
+    local target
+    local path
+    for skill_name in "${PERSONAL_EXCLUDE_SKILLS[@]}"; do
+        [ -n "$skill_name" ] || continue
+        for target in "${PERSONAL_TARGET_DIRS[@]}"; do
+            if [ "$PERSONAL_TARGET_LAYOUT" = "flat-files" ]; then
+                path="$target/$skill_name.md"
+            else
+                path="$target/$skill_name"
+            fi
+            if [ -e "$path" ]; then
+                report_result "fail" "personal-excluded:$skill_name:$target" "排除 skill 仍安装在 $path；请删掉或运行 sync 清理" 1
+            else
+                report_result "ok" "personal-excluded:$skill_name:$target" "" 1
+            fi
+        done
+    done
+}
+
 check_personal_sync() {
     if [ ! -d "$PERSONAL_SOURCE_DIR" ]; then
         echo "⚠️ 跳过个人 skill 检查：源目录 '$PERSONAL_SOURCE_DIR' 不存在。"
+        check_excluded_personal_skills
         return
     fi
 
@@ -88,12 +133,16 @@ check_personal_sync() {
     fi
 
     echo "📦 检查个人 skill 安装状态..."
+    check_excluded_personal_skills
 
     if [ "$PERSONAL_SOURCE_LAYOUT" = "flat-files" ]; then
         for skill_file in "$PERSONAL_SOURCE_DIR"/*.md; do
             [ -f "$skill_file" ] || continue
             filename=$(basename "$skill_file")
             skill_name="${filename%.md}"
+            if is_personal_excluded "$skill_name"; then
+                continue
+            fi
             for target in "${PERSONAL_TARGET_DIRS[@]}"; do
                 if [ "$PERSONAL_TARGET_LAYOUT" = "flat-files" ]; then
                     compare_pair "personal:$skill_name:$target" "$skill_file" "$target/$filename" 1
@@ -113,6 +162,9 @@ check_personal_sync() {
             [ -d "$skill_dir" ] || continue
             [ -f "$skill_dir/SKILL.md" ] || continue
             skill_name=$(basename "$skill_dir")
+            if is_personal_excluded "$skill_name"; then
+                continue
+            fi
             for target in "${PERSONAL_TARGET_DIRS[@]}"; do
                 compare_pair "personal:$skill_name:$target" "$skill_dir" "$target/$skill_name" 1
             done

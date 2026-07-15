@@ -11,7 +11,51 @@ if (-Not (Test-Path -Path $ConfigFile)) {
 
 . $ConfigFile
 
+if (-not (Get-Variable -Name PersonalExcludeSkills -Scope Script -ErrorAction SilentlyContinue) -and
+    -not (Get-Variable -Name PersonalExcludeSkills -ErrorAction SilentlyContinue)) {
+    $PersonalExcludeSkills = @()
+}
+
 Write-Host "🔄 开始执行 multi-cli-sync..." -ForegroundColor Cyan
+
+function Test-PersonalExcluded {
+    param([string]$SkillName)
+    if (-not $PersonalExcludeSkills) { return $false }
+    return ($PersonalExcludeSkills -contains $SkillName)
+}
+
+function Remove-PersonalInstall {
+    param(
+        [string]$SkillName,
+        [string]$Target
+    )
+    if ($PersonalTargetLayout -eq "flat-files") {
+        $path = Join-Path $Target "$SkillName.md"
+        if (Test-Path -Path $path) {
+            Remove-Item -Force $path
+            Write-Host "  🗑️ 已删除排除 skill $SkillName.md <- $Target" -ForegroundColor Yellow
+        }
+    } else {
+        $path = Join-Path $Target $SkillName
+        if (Test-Path -Path $path) {
+            Remove-Item -Recurse -Force $path
+            Write-Host "  🗑️ 已删除排除 skill $SkillName <- $Target" -ForegroundColor Yellow
+        }
+    }
+}
+
+function Remove-ExcludedPersonalSkills {
+    if ($PersonalTargetDirs.Count -eq 0) { return }
+    if (-not $PersonalExcludeSkills -or $PersonalExcludeSkills.Count -eq 0) { return }
+
+    Write-Host "🧹 清理已排除的个人 skill 安装副本..." -ForegroundColor Cyan
+    foreach ($skillName in $PersonalExcludeSkills) {
+        if (-not $skillName) { continue }
+        foreach ($target in $PersonalTargetDirs) {
+            Remove-PersonalInstall -SkillName $skillName -Target $target
+        }
+    }
+}
 
 function Copy-Pair {
     param(
@@ -37,6 +81,7 @@ function Copy-Pair {
 function Sync-PersonalSkills {
     if (-Not (Test-Path -Path $PersonalSourceDir -PathType Container)) {
         Write-Host "⚠️ 跳过个人 skill 同步：源目录 '$PersonalSourceDir' 不存在。" -ForegroundColor Yellow
+        Remove-ExcludedPersonalSkills
         return
     }
 
@@ -46,10 +91,15 @@ function Sync-PersonalSkills {
     }
 
     Write-Host "📦 同步个人 skill..." -ForegroundColor Cyan
+    Remove-ExcludedPersonalSkills
 
     if ($PersonalSourceLayout -eq "flat-files") {
         $files = Get-ChildItem -Path $PersonalSourceDir -Filter "*.md"
         foreach ($file in $files) {
+            if (Test-PersonalExcluded -SkillName $file.BaseName) {
+                Write-Host "  ⏭️ 跳过排除 skill $($file.BaseName)（源保留，不安装）" -ForegroundColor Yellow
+                continue
+            }
             foreach ($target in $PersonalTargetDirs) {
                 if (-Not (Test-Path -Path $target)) {
                     New-Item -ItemType Directory -Force -Path $target | Out-Null
@@ -74,6 +124,10 @@ function Sync-PersonalSkills {
         }
         $dirs = Get-ChildItem -Path $PersonalSourceDir -Directory | Where-Object { Test-Path (Join-Path $_.FullName "SKILL.md") }
         foreach ($dir in $dirs) {
+            if (Test-PersonalExcluded -SkillName $dir.Name) {
+                Write-Host "  ⏭️ 跳过排除 skill $($dir.Name)（源保留，不安装）" -ForegroundColor Yellow
+                continue
+            }
             foreach ($target in $PersonalTargetDirs) {
                 if (-Not (Test-Path -Path $target)) {
                     New-Item -ItemType Directory -Force -Path $target | Out-Null

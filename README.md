@@ -12,9 +12,7 @@
 
 不是所有 skill 都要装。推荐按需安装：
 
-- 如果你想让编码 agent 更稳：计划先行、task 并行派发给便宜模型/外部 agent、跨模型 review，安装 `nolo-plan/`
-- 如果你想统一管理个人 skill、同步到 Codex / Claude / Gemini 等多个 CLI，安装 `multi-cli-sync/`
-- 如果你想在实现和 review 时压掉过度设计（YAGNI、最小实现阶梯），并在动工前做维护路径预检，安装 `minimal-implementation-guard/`
+- 如果你想统一管理个人 skill、同步到 Codex / Claude / Gemini / Grok 等多个 CLI，安装 `multi-cli-sync/`
 - 如果你希望 agent 修 bug 先查根因、不乱打补丁（四阶段调试法），安装 `root-cause-debugging/`
 - 如果你想要复古 CRT + 温馨像素风的前端视觉规范，安装 `cozy-crt-pixelpunk/`
 - 如果你想创建、改进、评测自己的 skill，安装 `skill-creator/`
@@ -22,17 +20,22 @@
 
 安装步骤见 [INSTALL.md](INSTALL.md)。
 
+## 源保留、默认不安装
+
+- `nolo-plan/`：**只保留在本仓库源目录**，默认不要复制到 `~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.grok/skills` 等安装路径。
+- 需要时再手动打开源文件阅读或临时挂载；同步工具应通过 `PERSONAL_EXCLUDE_SKILLS` 跳过它，并**删除已装上的副本**。
+- 删除安装副本 ≠ 删除源目录。
+
 ## 仓库结构
 
 每个顶层目录就是一个独立 skill：
 
-- `nolo-plan/`
 - `multi-cli-sync/`
-- `minimal-implementation-guard/`
 - `root-cause-debugging/`
 - `cozy-crt-pixelpunk/`
 - `skill-creator/`
 - `nolo-cli/`
+- `nolo-plan/`（源归档，默认不安装）
 
 每个 skill 至少包含一个 `SKILL.md`。
 

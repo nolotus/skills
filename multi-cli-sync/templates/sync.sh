@@ -14,7 +14,60 @@ fi
 # shellcheck source=/dev/null
 . "$CONFIG_FILE"
 
+# 兼容旧配置
+if [ -z "${PERSONAL_EXCLUDE_SKILLS+x}" ]; then
+    PERSONAL_EXCLUDE_SKILLS=()
+fi
+
 echo "🔄 开始执行 multi-cli-sync..."
+
+is_personal_excluded() {
+    local skill_name="$1"
+    local excluded
+    for excluded in "${PERSONAL_EXCLUDE_SKILLS[@]+"${PERSONAL_EXCLUDE_SKILLS[@]}"}"; do
+        [ -n "$excluded" ] || continue
+        if [ "$skill_name" = "$excluded" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+remove_personal_install() {
+    local skill_name="$1"
+    local target="$2"
+
+    if [ "$PERSONAL_TARGET_LAYOUT" = "flat-files" ]; then
+        if [ -e "$target/$skill_name.md" ]; then
+            rm -f "$target/$skill_name.md"
+            echo "  🗑️ 已删除排除 skill $skill_name.md <- $target"
+        fi
+    else
+        if [ -e "$target/$skill_name" ]; then
+            rm -rf "$target/$skill_name"
+            echo "  🗑️ 已删除排除 skill $skill_name <- $target"
+        fi
+    fi
+}
+
+purge_excluded_personal_skills() {
+    if [ ${#PERSONAL_TARGET_DIRS[@]} -eq 0 ]; then
+        return
+    fi
+    if [ ${#PERSONAL_EXCLUDE_SKILLS[@]} -eq 0 ]; then
+        return
+    fi
+
+    echo "🧹 清理已排除的个人 skill 安装副本..."
+    local skill_name
+    local target
+    for skill_name in "${PERSONAL_EXCLUDE_SKILLS[@]}"; do
+        [ -n "$skill_name" ] || continue
+        for target in "${PERSONAL_TARGET_DIRS[@]}"; do
+            remove_personal_install "$skill_name" "$target"
+        done
+    done
+}
 
 copy_pair() {
     local source_path="$1"
@@ -32,6 +85,7 @@ copy_pair() {
 sync_personal_skills() {
     if [ ! -d "$PERSONAL_SOURCE_DIR" ]; then
         echo "⚠️ 跳过个人 skill 同步：源目录 '$PERSONAL_SOURCE_DIR' 不存在。"
+        purge_excluded_personal_skills
         return
     fi
 
@@ -41,12 +95,17 @@ sync_personal_skills() {
     fi
 
     echo "📦 同步个人 skill..."
+    purge_excluded_personal_skills
 
     if [ "$PERSONAL_SOURCE_LAYOUT" = "flat-files" ]; then
         for skill_file in "$PERSONAL_SOURCE_DIR"/*.md; do
             [ -f "$skill_file" ] || continue
             filename=$(basename "$skill_file")
             skill_name="${filename%.md}"
+            if is_personal_excluded "$skill_name"; then
+                echo "  ⏭️ 跳过排除 skill $skill_name（源保留，不安装）"
+                continue
+            fi
             for target in "${PERSONAL_TARGET_DIRS[@]}"; do
                 mkdir -p "$target"
                 if [ "$PERSONAL_TARGET_LAYOUT" = "flat-files" ]; then
@@ -70,6 +129,10 @@ sync_personal_skills() {
             [ -d "$skill_dir" ] || continue
             [ -f "$skill_dir/SKILL.md" ] || continue
             skill_name=$(basename "$skill_dir")
+            if is_personal_excluded "$skill_name"; then
+                echo "  ⏭️ 跳过排除 skill $skill_name（源保留，不安装）"
+                continue
+            fi
             for target in "${PERSONAL_TARGET_DIRS[@]}"; do
                 mkdir -p "$target"
                 rm -rf "$target/$skill_name"

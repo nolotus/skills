@@ -35,6 +35,17 @@ description: 当用户想把个人 skill 在多个 AI CLI 之间同步，并为 
 - `flat-files`
 - `folder-skills`
 
+#### 排除列表（源保留、不安装）
+
+配置 `PERSONAL_EXCLUDE_SKILLS`（bash）/ `$PersonalExcludeSkills`（PowerShell）：
+
+- **源目录继续保留**对应 skill，方便以后查阅或临时挂载
+- **sync 不会安装**它们到 `PERSONAL_TARGET_DIRS`
+- **sync 会删除**各目标目录里已存在的同名安装副本
+- **check 会报错**若排除 skill 仍出现在安装目录
+
+典型例子：`nolo-plan` 只做源归档，不要装到 `~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.grok/skills`。
+
 ### 2. 仓库镜像区
 
 适合这类场景：
@@ -101,6 +112,7 @@ description: 当用户想把个人 skill 在多个 AI CLI 之间同步，并为 
 
 1. 配置文件：`scripts/multi-cli-sync/config.sh` 或 `.ps1`
    - 写入个人 skill 源布局、目标布局、目标目录
+   - 写入 `PERSONAL_EXCLUDE_SKILLS`（源保留、不安装；sync 时清理目标副本）
    - 写入 repo mirror 规则
 2. Guidance 同步脚本：`scripts/multi-cli-sync/generate-guidance.sh` 或 `.ps1`
 3. 全局同步脚本：`scripts/multi-cli-sync/sync.sh` 或 `.ps1`
@@ -137,7 +149,8 @@ description: 当用户想把个人 skill 在多个 AI CLI 之间同步，并为 
 最后明确告诉用户：
 
 - 个人 skill 放进 `my-skills/` 后，可以运行 `sync` 分发到多个 CLI
-- `check` 会同时检查个人 skill 安装状态和 repo mirror gate
+- 不想装但要留源的 skill（如 `nolo-plan`）写进 `PERSONAL_EXCLUDE_SKILLS`；`sync` 会跳过并清理安装副本，不会动源目录
+- `check` 会同时检查个人 skill 安装状态、排除 skill 是否误装、以及 repo mirror gate
 - 如果 `REPO_MIRROR_WRITE_OK=1`，`sync` 还可以写入 repo mirror 目标
 - 如果只想把 repo mirror 当 gate，不想自动覆盖目标文件，就保持 `REPO_MIRROR_WRITE_OK=0`
 - 如果要改全局规则，必须改中心文档和配置文件，不要直接手改入口文件或镜像副本

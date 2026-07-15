@@ -92,9 +92,40 @@ function Compare-Pair {
     }
 }
 
+function Test-PersonalExcluded {
+    param([string]$SkillName)
+    if (-not (Get-Variable -Name PersonalExcludeSkills -ErrorAction SilentlyContinue)) { return $false }
+    if (-not $PersonalExcludeSkills) { return $false }
+    return ($PersonalExcludeSkills -contains $SkillName)
+}
+
+function Check-ExcludedPersonalSkills {
+    if ($PersonalTargetDirs.Count -eq 0) { return }
+    if (-not (Get-Variable -Name PersonalExcludeSkills -ErrorAction SilentlyContinue)) { return }
+    if (-not $PersonalExcludeSkills -or $PersonalExcludeSkills.Count -eq 0) { return }
+
+    Write-Host "🧹 检查已排除 skill 是否仍被安装..." -ForegroundColor Cyan
+    foreach ($skillName in $PersonalExcludeSkills) {
+        if (-not $skillName) { continue }
+        foreach ($target in $PersonalTargetDirs) {
+            $path = if ($PersonalTargetLayout -eq "flat-files") {
+                Join-Path $target "$skillName.md"
+            } else {
+                Join-Path $target $skillName
+            }
+            if (Test-Path -Path $path) {
+                Report-Result "fail" "personal-excluded:$skillName:$target" "排除 skill 仍安装在 $path；请删掉或运行 sync 清理" 1
+            } else {
+                Report-Result "ok" "personal-excluded:$skillName:$target" "" 1
+            }
+        }
+    }
+}
+
 function Check-PersonalSync {
     if (-Not (Test-Path -Path $PersonalSourceDir -PathType Container)) {
         Write-Host "⚠️ 跳过个人 skill 检查：源目录 '$PersonalSourceDir' 不存在。" -ForegroundColor Yellow
+        Check-ExcludedPersonalSkills
         return
     }
 
@@ -104,11 +135,13 @@ function Check-PersonalSync {
     }
 
     Write-Host "📦 检查个人 skill 安装状态..." -ForegroundColor Cyan
+    Check-ExcludedPersonalSkills
 
     if ($PersonalSourceLayout -eq "flat-files") {
         $files = Get-ChildItem -Path $PersonalSourceDir -Filter "*.md"
         foreach ($file in $files) {
             $skillName = $file.BaseName
+            if (Test-PersonalExcluded -SkillName $skillName) { continue }
             foreach ($target in $PersonalTargetDirs) {
                 if ($PersonalTargetLayout -eq "flat-files") {
                     Compare-Pair "personal:$skillName:$target" $file.FullName (Join-Path $target $file.Name) 1
@@ -126,6 +159,7 @@ function Check-PersonalSync {
         }
         $dirs = Get-ChildItem -Path $PersonalSourceDir -Directory | Where-Object { Test-Path (Join-Path $_.FullName "SKILL.md") }
         foreach ($dir in $dirs) {
+            if (Test-PersonalExcluded -SkillName $dir.Name) { continue }
             foreach ($target in $PersonalTargetDirs) {
                 Compare-Pair "personal:$($dir.Name):$target" $dir.FullName (Join-Path $target $dir.Name) 1
             }

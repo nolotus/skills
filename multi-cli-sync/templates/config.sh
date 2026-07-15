@@ -12,6 +12,14 @@ PERSONAL_TARGET_LAYOUT="flat-files"
 PERSONAL_TARGET_DIRS=(
     # "$HOME/.codex/skills"
     # "$HOME/.claude/skills"
+    # "$HOME/.agents/skills"
+    # "$HOME/.grok/skills"
+)
+
+# 源目录可保留、但不要安装/同步到 CLI 的 skill 名（basename）。
+# sync 会跳过它们，并删除各 PERSONAL_TARGET_DIRS 里的同名安装副本。
+PERSONAL_EXCLUDE_SKILLS=(
+    # "nolo-plan"
 )
 
 # 是否允许 sync.sh 主动写入 repo mirror 目标

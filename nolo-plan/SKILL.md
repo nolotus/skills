@@ -1,25 +1,55 @@
 ---
 name: nolo-plan
 description: >
-  nolo 平台编排方法：计划先行 → nolo CLI 查指派表选执行者 → 并行派发 → 跨模型 review。
-  适用于任何装了 nolo CLI 的编码 agent。触发词：子代理、并行执行、派发 task、多 agent review、
-  plan 然后执行、稳定写代码、nolo agent run。Do NOT use for 单文件微小修改或纯问答。
+  nolo 平台编排方法：计划先行 → nolo CLI 查指派表选执行者 → 并行派发 → 跨模型 review；
+  兼最小实现护栏（YAGNI、实现阶梯、隐性假设预检、复杂度 review）。适用于任何装了 nolo CLI
+  的编码 agent。触发词：子代理、并行执行、派发 task、多 agent review、plan 然后执行、
+  稳定写代码、nolo agent run、最简单方案、最小实现、YAGNI、over-engineering、bloat、
+  boilerplate、能删除什么、压复杂度。双出口：微/最小改动做完护栏后就地完成；非平凡任务
+  继续 plan→派发→review。纯问答不进实现工作流。Do NOT use as a substitute for security
+  review、correctness verification, or data integrity checks.
+  本 skill 默认只保留源目录、不自动安装到 CLI skill 路径；需要时再手动挂载。
 ---
 
 # Nolo Plan → Dispatch → Review
 
+> **分发策略**：默认**源归档**。保留 `skills/nolo-plan/`（或 `~/skills/nolo-plan/`）即可；
+> **不要**同步/安装到 `~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.grok/skills`。
+> 用 `multi-cli-sync` 时把 `nolo-plan` 放进 `PERSONAL_EXCLUDE_SKILLS`：sync 跳过安装并删除目标副本，不删源。
+
 融合**计划先行**(先想清楚再动手)、**最小实现**(能删不加)、**极简输出**(只说结果)。通过 nolo CLI 派发执行者，用便宜模型和并行把代码写得又快又稳。
 
-## 强制门(每个任务第一句,不可跳过)
+## 角色门(调用方决定,先于一切)
 
-开始回复时**必须同时完成两件事**,缺一即违规:
+角色由**调用方**决定,不由任务难度决定。先判定角色,再走对应路径:
 
-1. **声明**:当前任务是否适合进入 plan——适合 → 走下方完整流程;不适合(微小机械改动/纯问答)→ 一句理由再动工。
-2. **选通道**:适合 plan 时,**同一句话里报出执行通道**——查 nolo 指派表选执行者(见第 0 步)。没装 nolo CLI → 走 setup 引导,不要跳过。
+- **父级派来的 executor/reviewer(有界 task)**:父级已满足 plan/派发;禁止查指派表、调用 `nolo agent run`、创建子代理/review task/thread,或再派发——除非父级明确提升为 planner/coordinator。完成有界 task,交回证据或 blocker。
+- **面向 owner 的顶层 planner/coordinator(默认)**:保留下方全部声明、派发、review 与验收门。
 
-**硬刹车**:声明"适合 plan"后,实现类 task **必须派发执行者**(`nolo agent run`),不许规划者自己 edit 文件。唯一例外:微小豁免(≤2 文件机械改动)、紧急解阻、或返工算账后自己修更便宜。绕过此条 = 严重违规。
+无明确父级有界 task 时,默认走 planner/coordinator。以下强制门与第 0–3 步仅约束 planner/coordinator。
 
-## 第 0 步:发现执行者
+## 强制门(规划者每个任务第一句,不可跳过)
+
+规划者开始回复时**必须同时完成两件事**,缺一即违规:
+
+1. **声明出口**:微/最小(护栏后就地完成) / 非平凡(完整 plan→派发→review) / 纯问答(不进实现流)。一句理由。
+2. **选通道**:非平凡时,**同一句话里报出执行通道**——查 nolo 指派表选执行者(见第 0 步)。没装 nolo CLI → 走 setup 引导,不要跳过。
+
+**硬刹车**:声明"非平凡"后,实现类 task **必须派发执行者**(`nolo agent run`),不许规划者自己 edit 文件。唯一例外:微/最小出口、紧急解阻、或返工算账后自己修更便宜。绕过此条 = 严重违规。
+
+**通道唯一性(硬规则)**:review 任务同样必须通过 `nolo agent run` 派发 reviewer,不许规划者用内置 task 工具的子代理(如 scout)代替。内置子代理不是 nolo CLI 通道,绕过指派表 = 严重违规。read-only 调查/review 一律走 `nolo agent run --local`;宿主模型可用 ≠ nolo 执行通道可用。
+
+## 最小实现护栏(实现类任务,含微改;动工前)
+
+**隐性假设预检**(推理即可;有风险才说):交付物是演示还是真用户产物?谁维护、从哪入口改?权威真值是什么——会不会 hard-code/shadow/复制/缓存第二份真值?捷径会先坏掉哪个真实用户动作?有维护/所有权风险时围绕真实工作流重设计或先确认取舍。
+
+**阶梯**(第一条成立就停):需求是否该存在 → 能删解决吗 → 标准库 → 平台能力(浏览器/CSS/DB/shell/OS) → 已有依赖 → 现有项目抽象 → 最后才写最小正确 diff。
+
+**永不简化掉**:信任边界校验、数据完整性、可访问性基础、发布/回滚语义、必要证据;不新增 helper/route/config/依赖/抽象,除非现有路径明确扛不住。
+
+**双出口**:微/最小 → 护栏通过后窄改+聚焦验证,停在这里;非平凡 → 护栏结论写入 plan,继续第 0–3 步;纯问答 → 不进实现流。
+
+## 第 0 步:发现执行者(仅规划者)
 
 ### 前置:nolo CLI 可用性
 
@@ -153,9 +183,9 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 3. 加执行者行:把常用的 agent 填进去,按智力排序设 rank
 4. 验证:`nolo table list --purpose agent-dispatch --json` 能查到
 
-## 第 1 步:计划(非微小任务必做)
+## 第 1 步:计划(规划者;非微/最小出口必做)
 
-微小豁免:≤2 个文件的机械改动,直接做。其余先写 plan(文件,不是聊天),必含五项:
+微/最小出口:护栏通过后直接做(典型:≤2 文件机械改动)。其余先写 plan(文件,不是聊天),必含五项:
 
 1. **Task 列表**:每个 task 自包含——目标、涉及文件路径、验收标准。**写 task 描述前先查目标现状**:executor 会忠实执行你的猜测,把猜测写成指令等于亲手注入 bug
 2. **并行分组**:互不依赖的 task 标成一组,同时派发
@@ -163,11 +193,11 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 4. **Review 策略**:见第 3 步分档
 5. **验收证据**:什么产物算完成(diff、测试输出、截图)
 
-计划本身遵循最小实现阶梯:先问"这需要存在吗→能删除解决吗→标准库/平台/已有依赖能做吗",最后才写新代码(详见 `minimal-implementation-guard`)。
+计划本身遵循上方最小实现阶梯与预检;把阶梯停点与真值/维护约束写进 task 边界。
 
-## 第 2 步:派发
+## 第 2 步:派发(仅规划者)
 
-**硬规则:plan 写完 → 实现类 task 必须派发,不许规划者自己 edit。** 强制门的刹车在这里生效。微小豁免/紧急解阻/返工算账后自己修更便宜 = 唯一三种例外,需一句理由;例外情形下规划者自己写的 diff 仍受第 3 步「作者回避」约束,必须派另一个 agent review。
+**硬规则:plan 写完 → 实现类 task 必须派发,不许规划者自己 edit。** 强制门的刹车在这里生效。executor/reviewer 不走本步。微/最小出口/紧急解阻/返工算账后自己修更便宜 = 唯一三种例外,需一句理由;例外情形下规划者自己写的 diff 仍受第 3 步「作者回避」约束,必须派另一个 agent review。
 
 - **上下文隔离**:task prompt 必须自包含(文件路径 + 验收标准 + 必要背景),不传聊天历史。省钱且防污染。大上下文用 `--msg-file` 传文件路径。
 - **并行**:能拆就拆,能并就并。plan 把独立文件树拆成无文件重叠的并行 wave,同一 wave 一次全部派出(`--bg`),禁止串行干等。共享热路径(全局 store 一类)不拆给两个 agent 同时改,按包路径切分。
@@ -180,9 +210,9 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --timeout-ms <按档位>
 ```
 
-## 第 3 步:Review(跨模型,按复杂度分档)
+## 第 3 步:Review(规划者编排;跨模型,按复杂度分档)
 
-不同模型训练数据不同、盲区不同——reviewer 尽量换家族。
+不同模型训练数据不同、盲区不同——规划者尽量换家族派 reviewer。被父级派来的 reviewer 只审本 task,不查指派表、不再派发。
 
 **作者回避(硬规则,任何档位)**:diff 的 reviewer 不得是产出该 diff 的同一个 agent。执行者不得自审自己写的代码;规划者走豁免亲自实现的改动,同样必须派另一个 agent(尽量换家族)review,不能自己写完自己审。自审 = 该 review 无效,按未 review 处理。
 
@@ -193,6 +223,13 @@ nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --
 | 大 | 架构改动、高风险路径 | 2+ 个不同家族 reviewer 并行 |
 
 - Review 只看:正确性、是否超出 task 范围、能否更简单。
+- **最小实现 pass**(用户要压复杂度/YAGNI 时,可单独或叠加):只报可避免复杂度——`delete:` 死代码/猜测功能;`stdlib:` 标准库已有;`native:` 平台能力可替;`yagni:` 单实现抽象/无人 config/单调用 layer;`shrink:` 同样行为更少行。格式:`path:L<line>: <tag> <what to cut>. <replacement>.`;结尾 `net: -<N> lines possible.` 或 `Lean already. Ship.`。正确性/安全/数据完整性走普通 review,不混进此 pass。
+- **Review 角色模板(中/大档可选,规划者按 diff 特征选配)**:换家族隔离训练盲区,角色分工隔离注意力盲区,两者叠加。规划者按 diff 涉及面选 1-4 个角色,每个角色派给一个 reviewer(同一 reviewer 可兼任多角色):
+  - **安全审计员**:只看 auth/secrets/injection/CSRF/权限边界。适合:新增 HTTP 路由、凭证处理、认证流程。
+  - **数据完整性审计员**:只看 idempotency/race/transaction/数据丢失/跨边界泄漏。适合:同步逻辑、DB 写入、账号切换、删除路径。
+  - **架构审计员**:只看设计边界/耦合/可维护性/是否过度工程。适合:新模块、跨包重构、API 改动。
+  - **用户体验审计员**:只看 i18n/stuck state/error handling/可访问性。适合:UI 流程、onboarding、表单交互。
+  规划者在派发 reviewer 时把角色写进 spec:"以{角色}视角审查以下 diff,只报告该视角内的问题"。
 - **返工由规划者算账,不设死上限**:每轮返工前评估"继续返工的沟通/等待成本"vs"自己接手修完"哪个便宜。第一轮就交垃圾 → 直接收回自己干,顺便记下该通道不适合这类 task;改了两三轮还不满足要求 → 停止追加沟通,自己收尾或升级给用户。唯一硬规则:不允许无感知的无限循环,每轮必须有这次算账。
 - **Review 输出契约**:只有包含 findings/`Clean review` 与实际检查证据的文本才算完成;空响应、只说「我先检查」、或 timeout 都不算 review 证据。最多用更小 prompt 或不同 provider 重试 1 次;仍无有效结论就明确报告 external review incomplete,转规划者/owner review,禁止无限换 agent。
 
