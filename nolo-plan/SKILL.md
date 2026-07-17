@@ -15,7 +15,7 @@ description: >
 开始回复时**必须同时完成两件事**,缺一即违规:
 
 1. **声明**:当前任务是否适合进入 plan——适合 → 走下方完整流程;不适合(微小机械改动/纯问答)→ 一句理由再动工。
-2. **选通道**:适合 plan 时,**同一句话里报出执行通道**——查 nolo 指派表选执行者(见第 0 步)。没装 nolo CLI → 见 `setup.md`;装不了或不可用就按下方算账降级,不阻塞。
+2. **选通道**:适合 plan 时,**同一句话里报出执行通道**——查 nolo 指派表选执行者(见第 0 步)。没装 nolo CLI → 见 `references/setup.md`;装不了或不可用就按下方算账降级,不阻塞。
 
 **派发前算账**:声明"适合 plan"后,实现类 task 默认派发执行者(`nolo agent run`);但派发前先算一次账——spec 编写 + 轮询 + review 的总成本 vs 规划者直接实现并自验的成本,便宜者胜,结论一句话说明。nolo CLI 不可用时降级为宿主 subagent 或直接执行,不阻塞任务。
 
@@ -23,7 +23,7 @@ description: >
 
 ### 前置:nolo CLI 可用性
 
-`which nolo` 不存在 → 走 `setup.md` 引导;装不了或不可用时按派发前算账降级为宿主 subagent 或直接执行,不阻塞任务。
+`which nolo` 不存在 → 走 `references/setup.md` 引导;装不了或不可用时按派发前算账降级为宿主 subagent 或直接执行,不阻塞任务。
 
 ### 查指派表
 
@@ -34,7 +34,7 @@ nolo table list --purpose agent-dispatch --json
 ```
 
 - **有表** → `nolo table query --table <dbKey> --json` 查行,按 rank 选执行者。表里带排序、用途、额度状态,是派发真值。
-- **没表** → `nolo agent list --json` fallback 全量列表(无 rank/用途),选最便宜可胜任的。同时引导用户建指派表(见 `setup.md`)。
+- **没表** → `nolo agent list --json` fallback 全量列表(无 rank/用途),选最便宜可胜任的。同时引导用户建指派表(见 `references/setup.md`)。
 
 ### 档位选择与 spec 颗粒度(硬要求)
 

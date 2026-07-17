@@ -6,9 +6,14 @@
 
 先判断你需要哪类能力：
 
-- 需要多 CLI 同步和漂移检查：安装 `multi-cli-sync/`
-- 需要最小实现护栏和实现前的维护路径预检：安装 `minimal-implementation-guard/`
-- 需要 nolo CLI 操作指导：安装 `nolo-cli/`
+- 计划先行、并行派发、跨模型 review：安装 `nolo-plan/`（依赖 `nolo-cli/`，建议配套 `minimal-implementation-guard/`）
+- 统一管理个人 skill、同步到多个 CLI：安装 `multi-cli-sync/`
+- 压掉过度设计、动工前维护路径预检：安装 `minimal-implementation-guard/`
+- 修 bug 先查根因（四阶段调试法）：安装 `root-cause-debugging/`
+- 前端面板、指标展示、UI 信息密度：安装 `ui-design-guidelines/`
+- 复古 CRT + 像素风视觉规范：安装 `cozy-crt-pixelpunk/`
+- 创建、改进、评测自己的 skill：安装 `skill-creator/`
+- nolo CLI 操作指导：安装 `nolo-cli/`
 
 ## 目录约定
 

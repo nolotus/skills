@@ -112,13 +112,26 @@ nolo chat --agent <agent> --msg "你好"
 | `--category <name>` | 对话分类 |
 | `--image <path>` | 附带图片 |
 | `--timeout-ms` | 超时（毫秒） |
-| `--server` | 目标服务器 |
+| `--local` / `--server` / `--auto` | 运行位置：本机 / 指定服务器 / 自动（默认） |
+| `--cwd <path>` | 执行者工作目录 |
 
 超时建议：探针 60-120s；小编辑 300s；正常实现 600s；大范围 900s。
 
 ### Handle 解析
 
 Agent 可通过 handle（`fullstack`、`frontend-implementer`、`reviewer` 等）引用。CLI 从缓存或远程记录中解析 handle → agent key。
+
+### 控制面（后台 run 管理）
+
+`--bg` 派发返回 runId 后，用控制面跟踪与干预：
+
+```bash
+nolo agent ps --json                       # 列出活跃/最近的本地 run
+nolo agent status <runId> --json           # 单条状态；--watch 盯到结束
+nolo agent logs <runId> [--tail 50]        # 日志细节
+nolo agent stop <runId>                    # SIGTERM 优雅停止
+nolo agent kill <runId>                    # SIGKILL 强杀
+```
 
 ---
 
