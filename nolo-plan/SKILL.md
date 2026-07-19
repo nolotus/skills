@@ -33,7 +33,8 @@ description: >
 规划者开始回复时**必须同时完成两件事**,缺一即违规:
 
 1. **声明出口**:微/最小(护栏后就地完成) / 非平凡(完整 plan→派发→review) / 纯问答(不进实现流)。一句理由。
-2. **选通道**:非平凡时,**同一句话里报出执行通道**——查 nolo 指派表选执行者(见第 0 步)。没装 nolo CLI → 走 setup 引导,不要跳过。
+   **出口判定用步数,不用主观「大小」**:预计 ≥3 步的操作(含读改验、多文件改动、任何派发)= 非平凡;仅 2 步以内的机械改动 = 微/最小。不同宿主模型对「非平凡」的解释差异极大,只有数值阈值能让触发一致。
+2. **选通道**:非平凡时,**同一句话里报出执行通道**——先 `nolo table list --purpose agent-dispatch` 查指派表,只从表内选执行者;无表才 fallback `nolo agent list`(见第 0 步)。没装 nolo CLI → 走 setup 引导,不要跳过,不要降级到宿主子代理或自己动手。
 
 **硬刹车**:声明"非平凡"后,实现类 task **必须派发执行者**(`nolo agent run`),不许规划者自己 edit 文件。唯一例外:微/最小出口、紧急解阻、或返工算账后自己修更便宜。绕过此条 = 严重违规。
 
@@ -55,16 +56,22 @@ description: >
 
 `which nolo` 不存在 → 走 setup 引导(见下方),不要跳过。nolo 是唯一执行通道,没装就不能派发。
 
-### 查指派表
+### 查指派表(硬规则:指派表优先,先查表再谈执行者)
 
-指派表是一张 purpose=`agent-dispatch` 的 nolo table,存用户精选的执行者(列:agentKey / rank / recommendedFor / notes / currentUsage)。一条命令发现:
+指派表是**用户精选**的执行者名单(purpose=`agent-dispatch` 的 nolo table,列:agentKey / rank / recommendedFor / notes / currentUsage)。用户建了表就代表他已经做过选型决策,**规划者不得用自己的判断覆盖它**。
+
+**派发前的第一条命令必须是查表,不是列 agent**:
 
 ```bash
 nolo table list --purpose agent-dispatch --json
 ```
 
-- **有表** → `nolo table query --table <dbKey> --json` 查行,按 rank 选执行者(见下方智商档位表)。表里带智力排序、用途、额度状态,是派发真值。
-- **没表** → `nolo agent list --json` fallback 全量列表(无 rank/用途),选最便宜可胜任的。同时引导用户建指派表(见 setup)。
+- **有表** → `nolo table query --table <dbKey> --json` 查行,**只能从表内行里选**执行者,按 rank 选档(见下方智商档位表)。表里带智力排序、用途、额度状态,是派发真值,优先级高于 `nolo agent list` 的全量列表、高于规划者对模型的个人偏好、也高于任何硬编码默认 agent。
+- **没表** → 才允许 `nolo agent list --json` fallback 全量列表(无 rank/用途),选最便宜可胜任的,并**当轮就引导用户建指派表**(见 setup)。
+
+**禁止**:跳过 `nolo table list` 直接 `nolo agent list`;表里已有可胜任行却去表外挑 agent;凭记忆里的 agentKey 派发而不查当轮表(额度/暂停状态会变)。
+
+**声明义务**:派发时一句话报出走的是哪条路径与命中行——「指派表命中 `<agentKey>` rank<N>」或「无指派表,fallback `nolo agent list` 选 `<agentKey>`,建议建表」。表内无人可胜任(全被 `暂停`、或 recommendedFor 明显不覆盖)时,先说明再 fallback,不要静默绕过。
 
 ### 智商档位选择
 
@@ -126,6 +133,7 @@ nolo table list --purpose agent-dispatch --json
 - 指派表除智商档外必须记**性格缺陷 + 解药**(如:某模型探索黑洞→spec 给结论;某模型语义弱→验收写成可机检命令;某模型空响应→自动降级)。
 - 每次返工/停杀/失败先分类:`controller_prompt`(任务面/spec 有问题)、`runtime`(OAuth/connector/CLI/timeout)、`model`(在正确 bounded brief 与可用 runtime 下仍判断或交付失败)。观察可以写进任务记录;只有证据隔离到 `model` 时才把性格缺陷写回指派表,禁止用坏 prompt 污染 agent 档案。
 - 衡量执行者「能不能用」的唯一 KPI 是**一次交付率**(带着当前 spec 模板一次通过验收的比率),不是模型名气。
+- **教训回灌到执行者提示词(不只写指派表)**:证据隔离到 `model` 的缺陷,除写回指派表外,还要写进该 agent 自己的 system prompt(`nolo agent update <agent> --prompt-file <path>`)。两者管的事不同——指派表约束「派不派它」,提示词约束「它怎么干活」;只写表,下次照样派给它、照样犯同一个错。提示词里留一个「实测教训」区按时间倒序累积,**正反面都记**:失败写清现象 + 为什么算失败 + 具体要求;做对的也要记,否则只剩惩罚项会把模型压成过度保守。回灌内容必须是 review 复核过的事实,不是印象。
 
 ### 速度优先与额度维护
 
@@ -133,6 +141,8 @@ nolo table list --purpose agent-dispatch --json
 - 派发前读指派表 `currentUsage`/`notes`;`currentUsage` 以 `暂停` 开头或明确额度耗尽的跳过,换同档下一个。
 - 额度耗尽/runtime 挂时,把原因+日期写回表(`currentUsage`,必要时 `recommendedFor` 加「暂停/恢复后」前缀),避免下个 session 误派。
 - **宿主模型 ≠ nolo 执行通道**:当前对话宿主可用只说明规划者可用;派执行者仍要可用的 `nolo agent run --local` agentKey。
+- **分清计费口径**:指派表 `costModel` 要区分**订阅额度**(用完即停,如 ollama/antigravity 的周额度与 5h 额度)与**平台计费**(按量,不因额度耗尽中断)。两者失败模式不同:前者派发前必须查额度,后者要控成本。同 provider 的多个 agent 可能共用同一份订阅额度——表里看着两个可用执行者,实际是一个池子,其中一个跑爆另一个也用不了。平台默认已指向托管 provider,agent 无需再自带 `customProviderUrl`;自带会绕开平台计费改走订阅额度。
+- **派发前核对执行者实际生效配置**:新建或改过 agent 后,用 `nolo agent read <agent>` 复核 model / provider 的**生效值**,不要假设创建命令里传的参数就是最终配置(部分参数会互相覆盖,例如从别的 agent 复制 provider 时可能连模型一起带过来)。派错模型会让整条归因错位——你以为在评估 A 的能力,实际跑的是 B,写回指派表和提示词的结论也跟着错。
 
 ### 超时档位
 
