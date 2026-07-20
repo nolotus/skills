@@ -58,7 +58,7 @@ description: >
 
 ### 查指派表(硬规则:指派表优先,先查表再谈执行者)
 
-指派表是**用户精选**的执行者名单(purpose=`agent-dispatch` 的 nolo table,列:agentKey / rank / recommendedFor / notes / currentUsage)。用户建了表就代表他已经做过选型决策,**规划者不得用自己的判断覆盖它**。
+指派表是**用户精选**的执行者名单(purpose=`agent-dispatch` 的 nolo table,列:agentKey / rank / model / recommendedFor / notes)。用户建了表就代表他已经做过选型决策,**规划者不得用自己的判断覆盖它**。
 
 **派发前的第一条命令必须是查表,不是列 agent**:
 
@@ -66,12 +66,22 @@ description: >
 nolo table list --purpose agent-dispatch --json
 ```
 
-- **有表** → `nolo table query --table <dbKey> --json` 查行,**只能从表内行里选**执行者,按 rank 选档(见下方智商档位表)。表里带智力排序、用途、额度状态,是派发真值,优先级高于 `nolo agent list` 的全量列表、高于规划者对模型的个人偏好、也高于任何硬编码默认 agent。
+- **有表** → `nolo table query --table <dbKey> --json` 查行,**只能从表内行里选**执行者,按 rank 选档(见下方智商档位表)。表里带智力排序、用途、性格档案,是**选型**真值(可用性另行探活),优先级高于 `nolo agent list` 的全量列表、高于规划者对模型的个人偏好、也高于任何硬编码默认 agent。
 - **没表** → 才允许 `nolo agent list --json` fallback 全量列表(无 rank/用途),选最便宜可胜任的,并**当轮就引导用户建指派表**(见 setup)。
 
-**禁止**:跳过 `nolo table list` 直接 `nolo agent list`;表里已有可胜任行却去表外挑 agent;凭记忆里的 agentKey 派发而不查当轮表(额度/暂停状态会变)。
+**禁止**:跳过 `nolo table list` 直接 `nolo agent list`;表里已有可胜任行却去表外挑 agent;凭记忆里的 agentKey 派发而不查当轮表(rank/名单会变)。
 
-**声明义务**:派发时一句话报出走的是哪条路径与命中行——「指派表命中 `<agentKey>` rank<N>」或「无指派表,fallback `nolo agent list` 选 `<agentKey>`,建议建表」。表内无人可胜任(全被 `暂停`、或 recommendedFor 明显不覆盖)时,先说明再 fallback,不要静默绕过。
+**声明义务**:派发时一句话报出走的是哪条路径与命中行——「指派表命中 `<agentKey>` rank<N>」或「无指派表,fallback `nolo agent list` 选 `<agentKey>`,建议建表」。表内无人可胜任(recommendedFor 明显不覆盖、或探活全失败)时,先说明再 fallback,不要静默绕过。
+
+**表存耐久事实,易变状态靠探(硬规则)**:指派表只记几周到几个月才变一次的东西——rank(智商档)、model、recommendedFor、notes(性格缺陷+解药)。**额度、限流、暂停、"本周可用"这类易变状态一律不入表**,派发前用一次探活拿当轮真值:
+
+```bash
+nolo agent run --agent <agentKey> --msg "只回复 PONG" --local --timeout-ms 100000
+```
+
+理由:任何叫「current X」却靠人手维护的字段都必然腐烂,而且腐烂时**看起来仍然权威**。实测踩坑(2026-07-20):某行的 `currentUsage` 停留在 8 天前的「暂停:周额度耗尽 HTTP429」——那条备注自己就写着「下周重置后恢复」,重置日早已过去,规划者却据此避开了该 agent,把两个大任务都派给了标着「暂停」的那一个,同时完全无视表里标着「应优先派」的另一个。一次 2 秒的探活就能得到 ground truth,而那个字段还因为不在表的列定义里而**根本无法通过 CLI 更新**,注定持续过期。
+
+同理:探活失败也不要写回表,那是当轮 runtime 事实,按 `controller_prompt` / `runtime` / `model` 三分类处理(见下方性格档案与失败写回)。
 
 ### 智商档位选择
 
@@ -85,7 +95,7 @@ nolo table list --purpose agent-dispatch --json
 | 高 | 1 | 架构决策、高风险路径、难 task | 核心算法、安全边界、性能关键 |
 | review | 换家族 | 跨模型 diff 审查 | 用与执行者不同家族的 agent |
 
-**原则**:用能胜任的最低档。低档省钱省时间,高档留给硬骨头。额度标 `暂停` 的跳过,换同档下一个。
+**原则**:用能胜任的最低档。低档省钱省时间,高档留给硬骨头。探活失败的跳过,换同档下一个。
 
 ### 按智商档位调整 spec 详细度(硬要求)
 
@@ -144,8 +154,8 @@ nolo table list --purpose agent-dispatch --json
 ### 速度优先与额度维护
 
 - 选定 rank 档后,同档(或同等胜任)的多个 agent 里优先选实测更快且可用的,不要死绑某一 handle。**智商档 ≠ 速度档**:高智商模型的大块执行吞吐未必更快。
-- 派发前读指派表 `currentUsage`/`notes`;`currentUsage` 以 `暂停` 开头或明确额度耗尽的跳过,换同档下一个。
-- 额度耗尽/runtime 挂时,把原因+日期写回表(`currentUsage`,必要时 `recommendedFor` 加「暂停/恢复后」前缀),避免下个 session 误派。
+- 派发前读指派表 `notes`/`recommendedFor` 判断适配度,再用一次探活确认当轮可用;探活失败的跳过,换同档下一个。可用性不查表(见上方「表存耐久事实,易变状态靠探」)。
+- 额度耗尽/runtime 挂是**当轮事实,不写回表**——下个 session 探活自会发现,写进去只会变成过期的权威。只有确认是该 agent 的稳定特性(而非一时额度)时,才作为性格缺陷写进 `notes`。
 - **宿主模型 ≠ nolo 执行通道**:当前对话宿主可用只说明规划者可用;派执行者仍要可用的 `nolo agent run --local` agentKey。
 - **分清计费口径**:指派表 `costModel` 要区分**订阅额度**(用完即停,如 ollama/antigravity 的周额度与 5h 额度)与**平台计费**(按量,不因额度耗尽中断)。两者失败模式不同:前者派发前必须查额度,后者要控成本。同 provider 的多个 agent 可能共用同一份订阅额度——表里看着两个可用执行者,实际是一个池子,其中一个跑爆另一个也用不了。平台默认已指向托管 provider,agent 无需再自带 `customProviderUrl`;自带会绕开平台计费改走订阅额度。
 - **派发前核对执行者实际生效配置**:新建或改过 agent 后,用 `nolo agent read <agent>` 复核 model / provider 的**生效值**,不要假设创建命令里传的参数就是最终配置(部分参数会互相覆盖,例如从别的 agent 复制 provider 时可能连模型一起带过来)。派错模型会让整条归因错位——你以为在评估 A 的能力,实际跑的是 B,写回指派表和提示词的结论也跟着错。
@@ -196,7 +206,7 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 
 **装了但没有指派表**(`nolo table list --purpose agent-dispatch` 返回空):
 1. 建表:在 nolo 平台 UI 建一张 table,设 purpose 为 `agent-dispatch`(或用 `nolo table meta --name "Agent Dispatch Matrix" --purpose agent-dispatch` 如果 CLI 支持)
-2. 必填列:agentKey(text, primary) / name(text) / rank(number, 1最强) / recommendedFor(text) / currentUsage(text)
+2. 必填列:agentKey(text, primary) / model(text) / rank(number, 1最强) / recommendedFor(text) / notes(text)
 3. 加执行者行:把常用的 agent 填进去,按智力排序设 rank
 4. 验证:`nolo table list --purpose agent-dispatch --json` 能查到
 
@@ -274,5 +284,5 @@ nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --
 
 - 不替代宿主 CLI 的权限与安全规则
 - 不覆盖部署/发布(那是项目自己的流程)
-- 指派表是用户资产:默认只读;仅在 owner 提供证据(额度截图/bench 结果/明确要求)或失败写回规则触发时,写回 `currentUsage`/`notes`/`recommendedFor`
+- 指派表是用户资产:默认只读;仅在 owner 提供证据(bench 结果/明确要求)或失败写回规则触发时,写回 `notes`/`recommendedFor`
 - nolo CLI 细节见 `nolo-cli` skill
