@@ -44,7 +44,7 @@ description: 当用户想把个人 skill 在多个 AI CLI 之间同步，并为 
 - **sync 会删除**各目标目录里已存在的同名安装副本
 - **check 会报错**若排除 skill 仍出现在安装目录
 
-典型例子：`nolo-plan` 只做源归档，不要装到 `~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.grok/skills`。
+典型例子：`nolo-plan` 用软链挂载到各 CLI skill 目录（真源唯一、改源即生效），复制式安装会造成副本漂移。把它写进排除列表后：sync 跳过复制安装、清掉旧的独立副本，软链本身不受影响。注意「排除」≠「不安装」——它只是声明这个 skill 的安装由软链负责，不用 sync 管。
 
 ### 2. 仓库镜像区
 
@@ -149,7 +149,7 @@ description: 当用户想把个人 skill 在多个 AI CLI 之间同步，并为 
 最后明确告诉用户：
 
 - 个人 skill 放进 `my-skills/` 后，可以运行 `sync` 分发到多个 CLI
-- 不想装但要留源的 skill（如 `nolo-plan`）写进 `PERSONAL_EXCLUDE_SKILLS`；`sync` 会跳过并清理安装副本，不会动源目录
+- 用软链挂载、不走复制安装的 skill（如 `nolo-plan`）写进 `PERSONAL_EXCLUDE_SKILLS`；`sync` 会跳过复制并清理旧的独立副本，不动源目录也不动软链
 - `check` 会同时检查个人 skill 安装状态、排除 skill 是否误装、以及 repo mirror gate
 - 如果 `REPO_MIRROR_WRITE_OK=1`，`sync` 还可以写入 repo mirror 目标
 - 如果只想把 repo mirror 当 gate，不想自动覆盖目标文件，就保持 `REPO_MIRROR_WRITE_OK=0`
