@@ -228,20 +228,23 @@ nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --
 | 大 | 架构改动、高风险路径 | 2+ 个不同家族 reviewer 并行 |
 
 - Review 只看:正确性、是否超出 task 范围、能否更简单。
-- **reviewer 硬性 read-only(硬规则)**:派 reviewer 时用 `--blocked-tool` 在声明期禁止写/执行类工具,不靠 prompt 劝说"别改东西"。不同模型对 prompt 约束的遵守程度不同,声明期硬门才能保证一致。派发命令加:
-  ```bash
-  nolo agent run <reviewer> --blocked-tool writeFile --blocked-tool editFile --blocked-tool applyEdit --blocked-tool execShell --msg-file <review-spec.md> --local --bg --timeout-ms <按档位>
-  ```
-  模型无法调用不在工具集里的工具;这是 `resolveAgentRunToolSurface` 的声明期过滤,不是运行时拦截。与 `--allowed-tool` 白名单叠加时先白名单留、再黑名单删。
+- **reviewer 硬性 read-only(硬规则)**:派 reviewer 时用 `--blocked-tool` 在声明期禁止写/执行类工具,不靠 prompt 劝说"别改东西"。不同模型对 prompt 约束的遵守程度不同,声明期硬门才能保证一致。完整派发命令见下方 `--skill` 段(含 `--blocked-tool` + `--skill` 组合)。模型无法调用不在工具集里的工具;这是 `resolveAgentRunToolSurface` 的声明期过滤,不是运行时拦截。与 `--allowed-tool` 白名单叠加时先白名单留、再黑名单删。
 - **最小实现 pass**(用户要压复杂度/YAGNI 时,可单独或叠加):只报可避免复杂度——`delete:` 死代码/猜测功能;`stdlib:` 标准库已有;`native:` 平台能力可替;`yagni:` 单实现抽象/无人 config/单调用 layer;`shrink:` 同样行为更少行。格式:`path:L<line>: <tag> <what to cut>. <replacement>.`;结尾 `net: -<N> lines possible.` 或 `Lean already. Ship.`。正确性/安全/数据完整性走普通 review,不混进此 pass。
-- **Review 角色模板(中/大档可选,规划者按 diff 特征选配)**:换家族隔离训练盲区,角色分工隔离注意力盲区,两者叠加。规划者按 diff 涉及面选 1-4 个角色,每个角色派给一个 reviewer(同一 reviewer 可兼任多角色):
+- **Review 角色模板(中/大档可选,规划者按 diff 特征选配)**:换家族隔离训练盲区,角色分工隔离注意力盲区,两者叠加。规划者按 diff 涉及面选 1-5 个角色:
   - **安全审计员**:只看 auth/secrets/injection/CSRF/权限边界。适合:新增 HTTP 路由、凭证处理、认证流程。
   - **数据完整性审计员**:只看 idempotency/race/transaction/数据丢失/跨边界泄漏。适合:同步逻辑、DB 写入、账号切换、删除路径。
   - **架构审计员**:只看设计边界/耦合/可维护性/是否过度工程。适合:新模块、跨包重构、API 改动。
   - **用户体验审计员**:只看 i18n/stuck state/error handling/可访问性。适合:UI 流程、onboarding、表单交互。
+  - **静默失败猎手**:只查空 catch/吞错误/危险降级(.catch(()=>[]))/丢失堆栈/缺超时/缺回滚/log-and-forget。适合:异常处理路径、外部调用、DB 事务、后台任务。
   规划者在派发 reviewer 时把角色写进 spec:"以{角色}视角审查以下 diff,只报告该视角内的问题"。
+- **注意力隔离(按模型档位)**:rank3-4(含 Flash 等便宜模型)严格一角色一 reviewer 并行派发,不兼任;rank2 最多兼任 2 角色;rank1 可兼任 2-3 角色。模型越便宜,角色拆得越细,用并行换深度。
+- **review skill 动态挂载(硬规则)**:派 reviewer 时用 `--skill` 挂载 `references/review-skill.md`(或其 nolo 数据 dbKey),让 reviewer 自动拿到 Finding 质量门、假阳性清单、角色检查项、AI 生成代码关注点和输出格式。规划者无需手动摘录规则进 spec;spec 只写任务特定内容(diff、角色、检查范围)。完整派发命令:
+  ```bash
+  nolo agent run <reviewer> --blocked-tool writeFile --blocked-tool editFile --blocked-tool applyEdit --blocked-tool execShell --skill <review-skill.md路径或dbKey> --msg-file <review-spec.md> --local --bg --timeout-ms <按档位>
+  ```
 - **返工由规划者算账,不设死上限**:每轮返工前评估"继续返工的沟通/等待成本"vs"自己接手修完"哪个便宜。第一轮就交垃圾 → 直接收回自己干,顺便记下该通道不适合这类 task;改了两三轮还不满足要求 → 停止追加沟通,自己收尾或升级给用户。唯一硬规则:不允许无感知的无限循环,每轮必须有这次算账。
 - **Review 输出契约**:只有包含 findings/`Clean review` 与实际检查证据的文本才算完成;空响应、只说「我先检查」、或 timeout 都不算 review 证据。最多用更小 prompt 或不同 provider 重试 1 次;仍无有效结论就明确报告 external review incomplete,转规划者/owner review,禁止无限换 agent。
+- **Finding 质量门+假阳性清单+AI 生成代码关注点**:已内建在 `references/review-skill.md` 里,通过 `--skill` 挂载到 reviewer,规划者无需手动写进 spec。核心规则:每条 finding 报出前过四问(确切行号?具体失败模式?读过上下文?严重度站得住?);HIGH/CRITICAL 必须带代码片段+失败场景+为什么现有防护挡不住;零发现是合法结果;12 条假阳性先排除;AI 代码额外查行为回归/信任边界/隐藏耦合/成本复杂度。
 
 ## Commit 纪律
 
