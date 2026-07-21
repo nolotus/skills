@@ -12,11 +12,11 @@
 - 需要 skill 创作方法论：安装 `skill-creator/`
 - 需要 CRT/像素风视觉规范：安装 `cozy-crt-pixelpunk/`
 
-## 源保留、默认不安装
+## 软链挂载（真源唯一）
 
-- `nolo-plan/` 只作为**源归档**保留在本仓库，**不要**默认安装到各 CLI skill 目录。
-- 若本地曾装过，删除安装副本即可；**不要删源目录**（例如 `~/skills/nolo-plan`）。
-- 使用 `multi-cli-sync` 时，把 `nolo-plan` 写进 `PERSONAL_EXCLUDE_SKILLS`：sync 会跳过安装并清理目标目录里的同名副本。
+- `nolo-plan/` 真源保留在本仓库（例如 `~/skills/nolo-plan`），各 CLI skill 目录用软链指向真源,改源即生效,无副本漂移。
+- 软链挂载:先删目标目录里的旧副本,再建软链:`ln -sf ~/skills/nolo-plan ~/.codex/skills/nolo-plan`。
+- 使用 `multi-cli-sync` 时把 `nolo-plan` 写进 `PERSONAL_EXCLUDE_SKILLS`:sync 跳过自动安装并清理目标目录里的独立副本,软链不受影响。
 
 ## 目录约定
 
@@ -35,20 +35,20 @@
 2. 复制整个目录到你的目标工具 skill 目录中。
 3. 保持目录名不变，确认里面包含 `SKILL.md`。
 4. 如果你的工作语言不是中文，优先让代理把 `SKILL.md` 翻译成你的语言，再安装到本地目录。
-5. **不要**把 `PERSONAL_EXCLUDE_SKILLS` / 文档标明「源归档」的 skill 一并复制过去。
+5. **不要**把 `PERSONAL_EXCLUDE_SKILLS` 里标明「软链挂载」的 skill 当成普通目录复制过去;用 `ln -s` 挂载。
 
-## 卸载安装副本（保留源）
+## 重建软链（清理旧副本）
 
 ```bash
-# 只删安装路径，不动源仓库
-rm -rf \
-  ~/.agents/skills/nolo-plan \
-  ~/.claude/skills/nolo-plan \
-  ~/.codex/skills/nolo-plan \
-  ~/.grok/skills/nolo-plan
+# 先删目标路径下的旧副本（可能是独立目录），再建软链指向真源
+for d in ~/.agents/skills ~/.claude/skills ~/.codex/skills ~/.grok/skills; do
+  rm -rf "$d/nolo-plan"
+  mkdir -p "$d"
+  ln -sf ~/skills/nolo-plan "$d/nolo-plan"
+done
 ```
 
-若已配置 `multi-cli-sync` 的 `PERSONAL_EXCLUDE_SKILLS=("nolo-plan")`，直接跑 `sync` 也会清掉上述目标里的副本。
+若已配置 `multi-cli-sync` 的 `PERSONAL_EXCLUDE_SKILLS=("nolo-plan")`，直接跑 `sync` 只会清掉独立副本,不影响软链。
 
 ## 语言建议
 
@@ -64,8 +64,8 @@ rm -rf \
 ## 给不同用户的建议
 
 - 个人用户：从 `multi-cli-sync/` 开始
-- 日常编码：优先 `root-cause-debugging/` + 项目自己的 workflow，而不是默认装 `nolo-plan/`
-- 需要 plan/派发编排时：再手动打开源目录 `nolo-plan/`，不要自动同步安装
+- 日常编码：优先 `root-cause-debugging/` + 项目自己的 workflow
+- 需要 plan/派发编排时:软链挂载 `nolo-plan/` 到 CLI skill 目录,真源唯一,随源更新自动生效
 
 ## 不建议做的事
 

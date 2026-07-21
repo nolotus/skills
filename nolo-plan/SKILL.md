@@ -8,25 +8,16 @@ description: >
   boilerplate、能删除什么、压复杂度。双出口：微/最小改动做完护栏后就地完成；非平凡任务
   继续 plan→派发→review。纯问答不进实现工作流。Do NOT use as a substitute for security
   review、correctness verification, or data integrity checks.
-  本 skill 默认只保留源目录、不自动安装到 CLI skill 路径；需要时再手动挂载。
+  本 skill 以软链挂载到 CLI skill 目录,真源唯一保留在源仓库;改源即生效,无副本漂移。
 ---
 
 # Nolo Plan → Dispatch → Review
 
-> **分发策略**：默认**源归档**。保留 `skills/nolo-plan/`（或 `~/skills/nolo-plan/`）即可；
-> **不要**同步/安装到 `~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.grok/skills`。
-> 用 `multi-cli-sync` 时把 `nolo-plan` 放进 `PERSONAL_EXCLUDE_SKILLS`：sync 跳过安装并删除目标副本，不删源。
+> **分发策略**：默认**软链挂载**。真源在 `skills/nolo-plan/`（或 `~/skills/nolo-plan/`）；
+> 各 CLI skill 目录用 `ln -s` 指向真源：`ln -sf ~/skills/nolo-plan ~/.codex/skills/nolo-plan`（先删旧副本目录）。
+> 用 `multi-cli-sync` 时把 `nolo-plan` 放进 `PERSONAL_EXCLUDE_SKILLS`：sync 跳过自动安装并清理目标目录里的独立副本,软链不受影响。
 
 融合**计划先行**(先想清楚再动手)、**最小实现**(能删不加)、**极简输出**(只说结果)。通过 nolo CLI 派发执行者，用便宜模型和并行把代码写得又快又稳。
-
-## 角色门(调用方决定,先于一切)
-
-角色由**调用方**决定,不由任务难度决定。先判定角色,再走对应路径:
-
-- **父级派来的 executor/reviewer(有界 task)**:父级已满足 plan/派发;禁止查指派表、调用 `nolo agent run`、创建子代理/review task/thread,或再派发——除非父级明确提升为 planner/coordinator。完成有界 task,交回证据或 blocker。
-- **面向 owner 的顶层 planner/coordinator(默认)**:保留下方全部声明、派发、review 与验收门。
-
-无明确父级有界 task 时,默认走 planner/coordinator。以下强制门与第 0–3 步仅约束 planner/coordinator。
 
 ## 强制门(规划者每个任务第一句,不可跳过)
 
@@ -54,7 +45,7 @@ description: >
 
 ### 前置:nolo CLI 可用性
 
-`which nolo` 不存在 → 走 setup 引导(见下方),不要跳过。nolo 是唯一执行通道,没装就不能派发。
+`which nolo` 不存在 → 走 setup 引导(见 `references/setup.md`),不要跳过。nolo 是唯一执行通道,没装就不能派发。
 
 ### 查指派表(硬规则:指派表优先,先查表再谈执行者)
 
@@ -67,7 +58,7 @@ nolo table list --purpose agent-dispatch --json
 ```
 
 - **有表** → `nolo table query --table <dbKey> --json` 查行,**只能从表内行里选**执行者,按 rank 选档(见下方智商档位表)。表里带智力排序、用途、性格档案,是**选型**真值(可用性另行探活),优先级高于 `nolo agent list` 的全量列表、高于规划者对模型的个人偏好、也高于任何硬编码默认 agent。
-- **没表** → 才允许 `nolo agent list --json` fallback 全量列表(无 rank/用途),选最便宜可胜任的,并**当轮就引导用户建指派表**(见 setup)。
+- **没表** → 才允许 `nolo agent list --json` fallback 全量列表(无 rank/用途),选最便宜可胜任的,并**当轮就引导用户建指派表**(见 `references/setup.md`)。
 
 **禁止**:跳过 `nolo table list` 直接 `nolo agent list`;表里已有可胜任行却去表外挑 agent;凭记忆里的 agentKey 派发而不查当轮表(rank/名单会变)。
 
@@ -197,20 +188,7 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 
 向用户汇报时带 runId、agentKey、status 和验收证据。长时间无进展(按上面 stall audit 判定)→ `stop` → 拆小或换通道重派,禁止干等问人。
 
-### setup
-
-**没装 nolo CLI**:
-1. 安装:`curl -fsSL https://nolo.chat/install | bash`(或见 nolo.chat/docs)
-2. 登录:`nolo auth login`
-3. 验证:`nolo agent list --json` 能返回 agent 列表
-
-**装了但没有指派表**(`nolo table list --purpose agent-dispatch` 返回空):
-1. 建表:在 nolo 平台 UI 建一张 table,设 purpose 为 `agent-dispatch`(或用 `nolo table meta --name "Agent Dispatch Matrix" --purpose agent-dispatch` 如果 CLI 支持)
-2. 必填列:agentKey(text, primary) / model(text) / rank(number, 1最强) / recommendedFor(text) / notes(text)
-3. 加执行者行:把常用的 agent 填进去,按智力排序设 rank
-4. 验证:`nolo table list --purpose agent-dispatch --json` 能查到
-
-## 第 1 步:计划(规划者;非微/最小出口必做)
+## 第 1 步:计划(非微/最小出口必做)
 
 微/最小出口:护栏通过后直接做(典型:≤2 文件机械改动)。其余先写 plan(文件,不是聊天),必含五项:
 
@@ -224,7 +202,7 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 
 ## 第 2 步:派发(仅规划者)
 
-**硬规则:plan 写完 → 实现类 task 必须派发,不许规划者自己 edit。** 强制门的刹车在这里生效。executor/reviewer 不走本步。微/最小出口/紧急解阻/返工算账后自己修更便宜 = 唯一三种例外,需一句理由;例外情形下规划者自己写的 diff 仍受第 3 步「作者回避」约束,必须派另一个 agent review。
+**硬规则:plan 写完 → 实现类 task 必须派发,不许规划者自己 edit。** 强制门的刹车在这里生效。微/最小出口/紧急解阻/返工算账后自己修更便宜 = 唯一三种例外,需一句理由;例外情形下规划者自己写的 diff 仍受第 3 步「作者回避」约束,必须派另一个 agent review。
 
 - **上下文隔离**:task prompt 必须自包含(文件路径 + 验收标准 + 必要背景),不传聊天历史。省钱且防污染。大上下文用 `--msg-file` 传文件路径。
 - **并行**:能拆就拆,能并就并。plan 把独立文件树拆成无文件重叠的并行 wave,同一 wave 一次全部派出(`--bg`),禁止串行干等。共享热路径(全局 store 一类)不拆给两个 agent 同时改,按包路径切分。
