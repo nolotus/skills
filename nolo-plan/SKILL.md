@@ -228,6 +228,11 @@ nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --
 | 大 | 架构改动、高风险路径 | 2+ 个不同家族 reviewer 并行 |
 
 - Review 只看:正确性、是否超出 task 范围、能否更简单。
+- **reviewer 硬性 read-only(硬规则)**:派 reviewer 时用 `--blocked-tool` 在声明期禁止写/执行类工具,不靠 prompt 劝说"别改东西"。不同模型对 prompt 约束的遵守程度不同,声明期硬门才能保证一致。派发命令加:
+  ```bash
+  nolo agent run <reviewer> --blocked-tool writeFile --blocked-tool editFile --blocked-tool applyEdit --blocked-tool execShell --msg-file <review-spec.md> --local --bg --timeout-ms <按档位>
+  ```
+  模型无法调用不在工具集里的工具;这是 `resolveAgentRunToolSurface` 的声明期过滤,不是运行时拦截。与 `--allowed-tool` 白名单叠加时先白名单留、再黑名单删。
 - **最小实现 pass**(用户要压复杂度/YAGNI 时,可单独或叠加):只报可避免复杂度——`delete:` 死代码/猜测功能;`stdlib:` 标准库已有;`native:` 平台能力可替;`yagni:` 单实现抽象/无人 config/单调用 layer;`shrink:` 同样行为更少行。格式:`path:L<line>: <tag> <what to cut>. <replacement>.`;结尾 `net: -<N> lines possible.` 或 `Lean already. Ship.`。正确性/安全/数据完整性走普通 review,不混进此 pass。
 - **Review 角色模板(中/大档可选,规划者按 diff 特征选配)**:换家族隔离训练盲区,角色分工隔离注意力盲区,两者叠加。规划者按 diff 涉及面选 1-4 个角色,每个角色派给一个 reviewer(同一 reviewer 可兼任多角色):
   - **安全审计员**:只看 auth/secrets/injection/CSRF/权限边界。适合:新增 HTTP 路由、凭证处理、认证流程。

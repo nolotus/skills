@@ -111,6 +111,8 @@ nolo chat --agent <agent> --msg "你好"
 | `--inherit-from-dialog` | 记录父子对话关系 |
 | `--category <name>` | 对话分类 |
 | `--image <path>` | 附带图片 |
+| `--allowed-tool <tool>` | 白名单：只允许指定的工具（可多次传） |
+| `--blocked-tool <tool>` | 黑名单：禁止指定的工具（可多次传）；与 `--allowed-tool` 叠加：先白名单留，再黑名单删 |
 | `--timeout-ms` | 超时（毫秒） |
 | `--local` / `--server` / `--auto` | 运行位置：本机 / 指定服务器 / 自动（默认） |
 | `--cwd <path>` | 执行者工作目录 |
