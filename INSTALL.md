@@ -11,12 +11,13 @@
 - 需要系统化根因调试：安装 `root-cause-debugging/`
 - 需要 skill 创作方法论：安装 `skill-creator/`
 - 需要 CRT/像素风视觉规范：安装 `cozy-crt-pixelpunk/`
+- 需要写码前先搜复用：安装/软链 `search-first/`（与 nolo-plan 阶梯配套）
 
 ## 软链挂载（真源唯一）
 
-- `nolo-plan/` 真源保留在本仓库（例如 `~/skills/nolo-plan`），各 CLI skill 目录用软链指向真源,改源即生效,无副本漂移。
-- 软链挂载:先删目标目录里的旧副本,再建软链:`ln -sf ~/skills/nolo-plan ~/.codex/skills/nolo-plan`。
-- 使用 `multi-cli-sync` 时把 `nolo-plan` 写进 `PERSONAL_EXCLUDE_SKILLS`:sync 跳过自动安装并清理目标目录里的独立副本,软链不受影响。
+- `nolo-plan/`、`search-first/` 真源保留在本仓库（例如 `~/skills/nolo-plan`），各 CLI skill 目录用软链指向真源,改源即生效,无副本漂移。
+- 软链挂载:先删目标目录里的旧副本,再建软链:`ln -sf ~/skills/nolo-plan ~/.codex/skills/nolo-plan`（`search-first` 同理）。
+- 使用 `multi-cli-sync` 时把它们写进 `PERSONAL_EXCLUDE_SKILLS`:sync 跳过自动安装并清理目标目录里的独立副本,软链不受影响。
 
 ## 目录约定
 
