@@ -213,6 +213,7 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 - **技能挂载**:
   - 任务涉及前端改善/修改/新做 UI 时,派发命令必须带 `--skill page-0e95801d90-01KX89SZ3450YH5R4RG0KP0AES`(ui-design-guidelines,存于 nolo 数据,本地无副本)
   - 任务涉及编码/实现/修 bug/refactor/写测/改代码时,派发命令必须带 `--skill page-0e95801d90-01SK00000001SACHDK`(Coding Style,存于 nolo 数据);可与前端 skill 叠加
+  - 任务涉及共享客户端状态/按钮联动/store 重构(Redux 剥离、dialog/composer/quick-chat 等)时,加挂 `--skill ~/skills/click-path-audit/SKILL.md`(或 softlink 后的 click-path-audit);spec 必须限定审计范围(单触点/单表面/单 store)
   - 可叠加多个 `--skill <dbKey|md路径>` 挂其他技能。
 
 派发命令:
