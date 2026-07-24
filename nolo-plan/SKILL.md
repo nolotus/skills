@@ -247,7 +247,7 @@ nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --
   ```
 - **返工由规划者算账,不设死上限**:每轮返工前评估"继续返工的沟通/等待成本"vs"自己接手修完"哪个便宜。第一轮就交垃圾 → 直接收回自己干,顺便记下该通道不适合这类 task;改了两三轮还不满足要求 → 停止追加沟通,自己收尾或升级给用户。唯一硬规则:不允许无感知的无限循环,每轮必须有这次算账。
 - **Review 输出契约**:只有包含 findings/`Clean review` 与实际检查证据的文本才算完成;空响应、只说「我先检查」、或 timeout 都不算 review 证据。最多用更小 prompt 或不同 provider 重试 1 次;仍无有效结论就明确报告 external review incomplete,转规划者/owner review,禁止无限换 agent。
-- **Finding 质量门+假阳性清单+AI 生成代码关注点**:已内建在 `references/review-skill.md` 里,通过 `--skill` 挂载到 reviewer,规划者无需手动写进 spec。核心规则:每条 finding 报出前过四问(确切行号?具体失败模式?读过上下文?严重度站得住?);HIGH/CRITICAL 必须带代码片段+失败场景+为什么现有防护挡不住;零发现是合法结果;12 条假阳性先排除;AI 代码额外查行为回归/信任边界/隐藏耦合/成本复杂度。
+- **Finding 质量门+假阳性清单+AI 生成代码关注点**:已内建在 `references/review-skill.md` 里,通过 `--skill` 挂载到 reviewer,规划者无需手动写进 spec。核心规则:每条 finding 报出前过四问(确切行号?具体失败模式?读过上下文?严重度站得住?);HIGH/CRITICAL 必须带代码片段+失败场景+为什么现有防护挡不住;零发现是合法结果;假阳性先排除;安全敏感 diff 必跑安全审计项;AI 代码额外查行为回归/信任边界/隐藏耦合/成本复杂度。对齐 ECC code-reviewer 的质量门,角色与 bun-nolo 约定为项目定制,勿整份导入 ECC。
 
 ## Commit 纪律
 
