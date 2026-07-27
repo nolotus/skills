@@ -2,12 +2,13 @@
 name: nolo-plan
 description: >
   nolo 平台编排方法：计划先行 → nolo CLI 查指派表选执行者 → 并行派发 → 跨模型 review；
-  兼最小实现护栏（YAGNI、实现阶梯、隐性假设预检、复杂度 review）。适用于任何装了 nolo CLI
-  的编码 agent。触发词：子代理、并行执行、派发 task、多 agent review、plan 然后执行、
+  兼最小实现护栏（YAGNI、实现阶梯、隐性假设预检）——**动工前**的决策部分。适用于任何装了
+  nolo CLI 的编码 agent。触发词：子代理、并行执行、派发 task、多 agent review、plan 然后执行、
   稳定写代码、nolo agent run、最简单方案、最小实现、YAGNI、over-engineering、bloat、
   boilerplate、能删除什么、压复杂度。双出口：微/最小改动做完护栏后就地完成；非平凡任务
   继续 plan→派发→review。纯问答不进实现工作流。Do NOT use as a substitute for security
-  review、correctness verification, or data integrity checks.
+  review、correctness verification, or data integrity checks；review 规则与**产出后**的
+  精简 pass 见 `nolo-review`，commit/push 规则见 `nolo-commit`。
   本 skill 以软链挂载到 CLI skill 目录,真源唯一保留在源仓库;改源即生效,无副本漂移。
 ---
 
@@ -221,11 +222,22 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --timeout-ms <按档位>
 ```
 
-## 第 3 步:Review(规划者编排;跨模型,按复杂度分档)
+## 第 3 步:Review(规划者编排)
 
-不同模型训练数据不同、盲区不同——规划者尽量换家族派 reviewer。被父级派来的 reviewer 只审本 task,不查指派表、不再派发。
+**边界**:本节是**编排**——决定派谁审、派几个、怎么派。reviewer 自己那套规则
+(审查流程、Finding 质量门、假阳性清单、角色检查项、精简 pass 细则、输出格式与 Verdict)
+在 `nolo-review` skill 里,派发时用 `--skill` 挂给 reviewer 即可,**本文件不复述、也不要
+把本节内容塞进 reviewer 的上下文**——那会让它以为自己也要派发。
 
-**作者回避(硬规则,任何档位)**:diff 的 reviewer 不得是产出该 diff 的同一个 agent。执行者不得自审自己写的代码;规划者走豁免亲自实现的改动,同样必须派另一个 agent(尽量换家族)review,不能自己写完自己审。自审 = 该 review 无效,按未 review 处理。
+不同模型训练数据不同、盲区不同——尽量换家族派 reviewer。
+
+### 作者回避(硬规则,任何档位)
+
+diff 的 reviewer **不得是产出该 diff 的同一个 agent**。执行者不得自审自己写的代码;
+规划者走豁免亲自实现的改动,同样必须派另一个 agent(尽量换家族)review。
+**自审 = 该 review 无效,按未 review 处理。**
+
+### 按复杂度分档
 
 | 档 | 判定 | Review |
 |---|---|---|
@@ -233,32 +245,77 @@ nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --
 | 中 | 多 task 或跨模块 | +1 个不同模型 reviewer |
 | 大 | 架构改动、高风险路径 | 2+ 个不同家族 reviewer 并行 |
 
-- Review 只看:正确性、是否超出 task 范围、能否更简单。
-- **reviewer 硬性 read-only(硬规则)**:派 reviewer 时用 `--blocked-tool` 在声明期禁止写/执行类工具,不靠 prompt 劝说"别改东西"。不同模型对 prompt 约束的遵守程度不同,声明期硬门才能保证一致。完整派发命令见下方 `--skill` 段(含 `--blocked-tool` + `--skill` 组合)。模型无法调用不在工具集里的工具;这是 `resolveAgentRunToolSurface` 的声明期过滤,不是运行时拦截。与 `--allowed-tool` 白名单叠加时先白名单留、再黑名单删。
-- **最小实现 pass**(用户要压复杂度/YAGNI 时,可单独或叠加):只报可避免复杂度——`delete:` 死代码/猜测功能;`stdlib:` 标准库已有;`native:` 平台能力可替;`yagni:` 单实现抽象/无人 config/单调用 layer;`shrink:` 同样行为更少行。格式:`path:L<line>: <tag> <what to cut>. <replacement>.`;结尾 `net: -<N> lines possible.` 或 `Lean already. Ship.`。正确性/安全/数据完整性走普通 review,不混进此 pass。
-- **Review 角色模板(中/大档可选,规划者按 diff 特征选配)**:换家族隔离训练盲区,角色分工隔离注意力盲区,两者叠加。规划者按 diff 涉及面选 1-5 个角色:
-  - **安全审计员**:只看 auth/secrets/injection/CSRF/权限边界。适合:新增 HTTP 路由、凭证处理、认证流程。
-  - **数据完整性审计员**:只看 idempotency/race/transaction/数据丢失/跨边界泄漏。适合:同步逻辑、DB 写入、账号切换、删除路径。
-  - **架构审计员**:只看设计边界/耦合/可维护性/是否过度工程。适合:新模块、跨包重构、API 改动。
-  - **用户体验审计员**:只看 i18n/stuck state/error handling/可访问性。适合:UI 流程、onboarding、表单交互。
-  - **静默失败猎手**:只查空 catch/吞错误/危险降级(.catch(()=>[]))/丢失堆栈/缺超时/缺回滚/log-and-forget。适合:异常处理路径、外部调用、DB 事务、后台任务。
-  规划者在派发 reviewer 时把角色写进 spec:"以{角色}视角审查以下 diff,只报告该视角内的问题"。
-- **注意力隔离(按模型档位)**:rank3-4(含 Flash 等便宜模型)严格一角色一 reviewer 并行派发,不兼任;rank2 最多兼任 2 角色;rank1 可兼任 2-3 角色。模型越便宜,角色拆得越细,用并行换深度。
-- **review skill 动态挂载(硬规则)**:派 reviewer 时用 `--skill` 挂载 `references/review-skill.md`(或其 nolo 数据 dbKey),让 reviewer 自动拿到 Finding 质量门、假阳性清单、角色检查项、AI 生成代码关注点和输出格式。规划者无需手动摘录规则进 spec;spec 只写任务特定内容(diff、角色、检查范围)。完整派发命令:
-  ```bash
-  nolo agent run <reviewer> --blocked-tool writeFile --blocked-tool editFile --blocked-tool applyEdit --blocked-tool execShell --skill <review-skill.md路径或dbKey> --msg-file <review-spec.md> --local --bg --timeout-ms <按档位>
-  ```
-- **返工由规划者算账,不设死上限**:每轮返工前评估"继续返工的沟通/等待成本"vs"自己接手修完"哪个便宜。第一轮就交垃圾 → 直接收回自己干,顺便记下该通道不适合这类 task;改了两三轮还不满足要求 → 停止追加沟通,自己收尾或升级给用户。唯一硬规则:不允许无感知的无限循环,每轮必须有这次算账。
-- **Review 输出契约**:只有包含 findings/`Clean review` 与实际检查证据的文本才算完成;空响应、只说「我先检查」、或 timeout 都不算 review 证据。最多用更小 prompt 或不同 provider 重试 1 次;仍无有效结论就明确报告 external review incomplete,转规划者/owner review,禁止无限换 agent。
-- **Finding 质量门+假阳性清单+AI 生成代码关注点**:已内建在 `references/review-skill.md` 里,通过 `--skill` 挂载到 reviewer,规划者无需手动写进 spec。核心规则:每条 finding 报出前过四问(确切行号?具体失败模式?读过上下文?严重度站得住?);HIGH/CRITICAL 必须带代码片段+失败场景+为什么现有防护挡不住;零发现是合法结果;假阳性先排除;安全敏感 diff 必跑安全审计项;AI 代码额外查行为回归/信任边界/隐藏耦合/成本复杂度。对齐 ECC code-reviewer 的质量门,角色与 bun-nolo 约定为项目定制,勿整份导入 ECC。
+### reviewer 硬性 read-only(硬规则)
+
+用 `--blocked-tool` 在**声明期**禁掉写/执行类工具,不靠 prompt 劝说「别改东西」。
+不同模型对 prompt 约束的遵守程度差异极大,只有声明期硬门能保证一致——模型无法调用
+不在工具集里的工具。这是 `resolveAgentRunToolSurface` 的声明期过滤,不是运行时拦截。
+与 `--allowed-tool` 白名单叠加时先白名单留、再黑名单删。
+
+实测代价(2026-07-27):一次并行派发中,未加 `--blocked-tool` 的执行者对 spec 明令
+「不要碰」的目录跑了 `git checkout --`,把另一个执行者已落盘的改动整体抹掉。
+同一个 agent 在后续 review 任务里加了 `--blocked-tool` 后没再出问题。
+
+### 派发命令
+
+```bash
+nolo agent run <reviewer> \
+  --blocked-tool writeFile --blocked-tool editFile --blocked-tool applyEdit --blocked-tool execShell \
+  --skill <nolo-review 的 SKILL.md 路径或 dbKey> \
+  --msg-file <review-spec.md> --local --bg --timeout-ms <按档位>
+```
+
+挂了 `nolo-review` 之后,**spec 只写任务特定内容**(diff、角色、检查范围、背景),
+不要手动摘录规则。
+
+### 角色选配(中/大档,按 diff 涉及面选 1-5 个)
+
+换家族隔离**训练**盲区,角色分工隔离**注意力**盲区,两者叠加。
+
+| 角色 | 适合的 diff |
+|---|---|
+| 安全审计员 | 新增 HTTP 路由、凭证处理、认证流程 |
+| 数据完整性审计员 | 同步逻辑、DB 写入、账号切换、删除路径 |
+| 架构审计员 | 新模块、跨包重构、API 改动 |
+| 用户体验审计员 | UI 流程、onboarding、表单交互 |
+| 静默失败猎手 | 异常处理、外部调用、DB 事务、后台任务 |
+
+派发时把角色写进 spec:「以{角色}视角审查以下 diff,只报告该视角内的问题」。
+各角色具体检查项在 `nolo-review` 里,规划者只需选角色。
+
+**注意力隔离(按模型档位)**:rank3-4(含 Flash 等便宜模型)严格一角色一 reviewer
+并行派发,不兼任;rank2 最多兼任 2 角色;rank1 可兼任 2-3 角色。
+模型越便宜,角色拆得越细,用并行换深度。
+
+### 精简 pass(何时派)
+
+用户要压复杂度/YAGNI、或 diff 明显臃肿时,在 spec 里写明「只跑精简 pass」。
+它与普通 review **正交**:正确性/安全/数据完整性走普通 review,不混进此 pass。
+tag 与输出格式在 `nolo-review` 里。
+
+> **与最小实现护栏的边界**:上方「最小实现护栏」是**动工前**的决策阶梯;
+> 精简 pass 是**产出后**对已有 diff 的审查,产物是 finding 列表。同一原则、两个时刻。
+
+### 返工由规划者算账,不设死上限
+
+每轮返工前评估「继续返工的沟通/等待成本」vs「自己接手修完」哪个便宜:
+第一轮就交垃圾 → 直接收回自己干,顺便记下该通道不适合这类 task;
+改了两三轮还不满足 → 停止追加沟通,自己收尾或升级给用户。
+唯一硬规则:**不允许无感知的无限循环**,每轮必须有这次算账。
+
+### Review 输出契约
+
+只有包含 findings 或 `Clean review` **且带实际检查证据**的文本才算完成。
+空响应、只说「我先检查」、timeout——都不算 review 证据。
+最多用更小 prompt 或不同 provider 重试 1 次;仍无有效结论就明确报告
+external review incomplete,转规划者/owner review,**禁止无限换 agent**。
 
 ## Commit 纪律
 
-唯一标准:**干净、一眼看出干了啥、容易整体撤回**(场景:线上炸了 revert 一个 commit 就能摘干净),但不过度细分导致 commit 太多。
+commit 的分组标准、必填的 AI 署名(`Assistant-Model` trailer)、push/部署的批准边界
+全部由 `nolo-commit` skill 定义,本文件不复述。要提交时先加载它。
 
-- 分组单位 = 可回退的功能单元:一个功能(含其测试、i18n、附带重构)= 一个 commit;独立的 bug 修复/工具修复 = 单独 commit;纯文档可并入相关 commit 或单独一个。
-- owner 要求 commit 时按此标准直接分组提交,**不再询问怎么分、分几个**;提交后报告结果即可。
-- push/合并集成线/部署仍需 owner 明确批准,commit 不用。
+(bun-nolo 仓库内真源:`docs/skills/nolo-commit.md`;其他仓库按各自安装位置。)
 
 ## 输出纪律
 

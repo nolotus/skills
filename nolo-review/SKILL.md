@@ -1,18 +1,23 @@
 ---
 name: nolo-review
 description: >
-  Reviewer 动态挂载技能。派 reviewer 时用 --skill 挂载，让 reviewer 自动拿到
-  Finding 质量门、假阳性清单、角色检查项、AI 生成代码关注点和输出格式要求。
-  规划者无需手动摘录规则进 spec。
+  Reviewer 侧规则载荷：审查流程、Finding 质量门、假阳性清单、角色检查项、
+  精简(YAGNI)pass、AI 生成代码关注点、输出格式与 Verdict 标准。
+  用法是被挂载——规划者派 reviewer 时 `--skill` 挂上本文件，reviewer 自动拿到全部规则，
+  spec 只写任务特定内容（diff、角色、检查范围）。触发词：review 代码、审查 diff、
+  reviewer、finding、假阳性、严重度、精简 pass、YAGNI pass、Verdict。
+  Do NOT use for 决定派谁审/派几个（那是 nolo-plan 第 3 步的编排规则）、
+  写实现本身（nolo-plan）、commit/push 规则（nolo-commit）。
 ---
 
-# Nolo Review Skill
+# Nolo Review（reviewer 侧）
 
-> 本 skill 通过 `nolo agent run <reviewer> --skill <path-or-dbKey> --msg-file <spec>` 挂载到 reviewer。
-> reviewer 自动拿到以下全部规则；spec 只写任务特定内容（diff、角色、检查范围）。
-> 质量门/假阳性表对齐 ECC code-reviewer；角色与 bun-nolo 工作流为项目定制，勿整份导入 ECC。
+**你是 reviewer。** 本文件是你这一轮的全部规则；spec 只补任务特定内容。
 
-## Review 流程（简）
+**你不派发、不查指派表、不改文件。** 只审 spec 给你的 diff，产出 finding 或 `Clean review`。
+派谁来审、派几个、怎么加 `--blocked-tool`——那是规划者的事，写在 `nolo-plan` 第 3 步，与你无关。
+
+## 流程
 
 1. **Gather** — `git diff` / `git diff --staged`（或 spec 给出的 diff）；无改动则直接 Clean review。
 2. **Scope** — 弄清改了哪些文件、对应什么功能/修复。
@@ -28,9 +33,9 @@ description: >
 
 ## Finding 质量门（硬规则，每条 finding 报出前过）
 
-报任何 finding 前过四问，任一答"否"或"不确定"则降级或丢弃：
+报任何 finding 前过四问，任一答「否」或「不确定」则降级或丢弃：
 
-1. **能引用确切行号?** — 命名文件和行号。"auth 层某处"这类模糊发现不 actionable，丢弃。
+1. **能引用确切行号?** — 命名文件和行号。「auth 层某处」这类模糊发现不 actionable，丢弃。
 2. **能描述具体失败模式?** — 命名输入、状态和坏结果。说不出触发条件 = 模式匹配，不是 review。
 3. **读过周围上下文?** — 查过调用方、imports、测试。很多表面问题是上一层已处理或有类型 guard。
 4. **严重度站得住?** — 缺 JSDoc 永远不是 HIGH；测试 fixture 里的 `any` 永远不是 CRITICAL。严重度膨胀比漏报更伤信任。
@@ -47,7 +52,7 @@ description: >
 
 干净的 review 是有效的 review。不要为证明 review 跑过而制造 finding。
 如果 diff 小、类型完备、有测试、遵循项目模式，正确输出是零 finding + `Clean review`。
-制造的 finding、填充式 nitpick、猜测性"考虑用 X"、无触发条件的假设性 edge case
+制造的 finding、填充式 nitpick、猜测性「考虑用 X」、无触发条件的假设性 edge case
 是 LLM reviewer 的主要失败模式，直接损害 review 的价值。
 
 ## 假阳性清单（报之前先排除）
@@ -56,23 +61,23 @@ LLM reviewer 常见误报模式。报之前先验证，除非有本代码库的�
 
 | 模式 | 跳过条件 |
 |---|---|
-| "考虑加错误处理" | 先查调用方/框架是否已处理（Express error middleware、上层 try/catch、Promise .catch 链）。处理了就跳过。 |
-| "缺少输入验证" | 函数是内部调用且调用方已校验——追踪至少一个调用方再报。 |
-| "可能空指针" | 上一行已类型收窄或有 if guard——追踪类型流，别只看 `?.`。 |
-| "魔法数字" | HTTP 状态码(200/404)、1000ms、60、24、1024、数组索引 0/-1 等已知常量跳过；单用途局部常量且变量名自解释的也跳过。 |
-| "N+1 查询" | 固定基数循环（枚举四元素）或已用 DataLoader/batching 不算。 |
-| "函数太长" | 穷举 switch、配置对象、测试表、生成代码不算。长度 ≠ 复杂度。 |
-| "缺少 await" | 先查是否有意 fire-and-forget（日志/指标/后台队列推送）。看有无注释或 `void` 前缀。 |
-| "应该用 TypeScript" | JS-only 文件不报。匹配项目现有语言，不建议换栈。 |
-| "硬编码值" | 测试 fixture、示例代码、文档片段里的硬编码是正确的。测试就该有硬编码期望值。 |
-| "安全戏" | 非密码学场景的 `Math.random()`（动画/jitter/采样）不报；插件系统里明确是代码加载面的 `eval`/`Function` 不报。 |
-| "Prefer const over let" | 变量被重新赋值时不报。读完整函数再报。 |
-| "Missing JSDoc" | 单用途内部 helper 且名称+签名自解释的不报。 |
-| "应加 useMemo/useCallback" | bun-nolo / React Compiler 路径默认不报；除非已有证据证明热路径多余渲染。 |
+| 「考虑加错误处理」 | 先查调用方/框架是否已处理（Express error middleware、上层 try/catch、Promise .catch 链）。处理了就跳过。 |
+| 「缺少输入验证」 | 函数是内部调用且调用方已校验——追踪至少一个调用方再报。 |
+| 「可能空指针」 | 上一行已类型收窄或有 if guard——追踪类型流，别只看 `?.`。 |
+| 「魔法数字」 | HTTP 状态码(200/404)、1000ms、60、24、1024、数组索引 0/-1 等已知常量跳过；单用途局部常量且变量名自解释的也跳过。 |
+| 「N+1 查询」 | 固定基数循环（枚举四元素）或已用 DataLoader/batching 不算。 |
+| 「函数太长」 | 穷举 switch、配置对象、测试表、生成代码不算。长度 ≠ 复杂度。 |
+| 「缺少 await」 | 先查是否有意 fire-and-forget（日志/指标/后台队列推送）。看有无注释或 `void` 前缀。 |
+| 「应该用 TypeScript」 | JS-only 文件不报。匹配项目现有语言，不建议换栈。 |
+| 「硬编码值」 | 测试 fixture、示例代码、文档片段里的硬编码是正确的。测试就该有硬编码期望值。 |
+| 「安全戏」 | 非密码学场景的 `Math.random()`（动画/jitter/采样）不报；插件系统里明确是代码加载面的 `eval`/`Function` 不报。 |
+| 「Prefer const over let」 | 变量被重新赋值时不报。读完整函数再报。 |
+| 「Missing JSDoc」 | 单用途内部 helper 且名称+签名自解释的不报。 |
+| 「应加 useMemo/useCallback」 | bun-nolo / React Compiler 路径默认不报；除非已有证据证明热路径多余渲染。 |
 
 判断标尺：**这个团队的高级工程师真会在 review 里改这个吗?** 不会就跳过。
 
-## 安全敏感触发（规划者 / reviewer）
+## 安全敏感触发
 
 diff 触及下列任一类时，安全审计员检查项视为**必跑**（即使 spec 未点名安全角色）：
 
@@ -84,7 +89,7 @@ diff 触及下列任一类时，安全审计员检查项视为**必跑**（即�
 
 ## 角色检查项
 
-reviewer 按规划者指定的角色审查。未指定角色时全部检查。
+按规划者指定的角色审查。未指定角色时全部检查。
 
 ### 安全审计员
 - 硬编码凭证（API key/password/token/connection string in source）
@@ -122,7 +127,7 @@ reviewer 按规划者指定的角色审查。未指定角色时全部检查。
 - 设计边界（新增耦合是否合理）
 - 循环依赖
 - 可维护性（是否过度工程、单实现抽象、无人 config）
-- 是否与现有抽象重复（制造第二份真值）
+- 是否与现有抽象重复（**制造第二份真值**）
 - API 兼容性（签名变更是否破坏调用方）
 - 文件/函数体量：典型 200–400 行、单文件 >800 / 函数 >50 且可拆时再报（穷举 switch/配置表除外）
 
@@ -146,23 +151,68 @@ reviewer 按规划者指定的角色审查。未指定角色时全部检查。
 - 死代码：注释掉的大块、未使用 import、不可达分支
 - 原地 mutation（应 immutable 更新时）
 
-## bun-nolo / 项目约定（有冲突时以仓库为准）
+## 精简 pass
 
-- Coding style：小文件优先、immutable、边界校验（见 Cursor `coding-style` / Coding Style skill）
-- 推送/发布须用户明确批准；reviewer 不建议「直接 push」
-- 不把「缺 80% 覆盖率」当硬门；只报**本次引入的未测关键路径**
-- 匹配现有模式；拿不准时跟仓库其余代码走
+**只在 spec 点名「跑精简 pass」时启用。** 只报**可避免的复杂度**，
+不报正确性/安全/数据完整性问题——那些走普通 review。
+
+五个 tag：
+
+| tag | 报什么 |
+|---|---|
+| `delete:` | 死代码、猜测性功能、没人调用的分支 |
+| `stdlib:` | 标准库已有等价物 |
+| `native:` | 平台能力可替（浏览器/CSS/DB/shell/OS） |
+| `yagni:` | 单实现的抽象、无人使用的 config、单调用的 layer |
+| `shrink:` | 同样行为可以更少行 |
+
+格式，每条一行：
+
+```
+path/to/file.ts:L42: yagni: 这个 Strategy 接口只有一个实现. 直接内联 DefaultStrategy 的三行逻辑.
+```
+
+结尾必须给净收益结论，二选一：
+
+```
+net: -<N> lines possible.
+```
+
+或（已经足够精简时）：
+
+```
+Lean already. Ship.
+```
+
+**精简 pass 的假阳性**（这些不报）：
+
+- 为可测试性开的注入缝（否则测试要跑真实超时/真实网络）——是必要的缝，不是过度设计
+- 信任边界校验、数据完整性检查、可访问性基础、发布/回滚语义、必要证据——**永不简化掉**
+- 注释解释「为什么」而非「是什么」的——那是防止后人改错的护栏，删了会复发旧 bug
+- 重复的**测试** fixture——测试重复常常比测试抽象更好读
 
 ## AI 生成代码 review 关注点（所有角色通用）
 
-nolo-plan 审的 diff 几乎全是 AI 生成代码。除各角色专有检查项外，所有 reviewer 额外关注：
+本流程审的 diff 几乎全是 AI 生成代码。除各角色专有检查项外，所有 reviewer 额外关注：
 
 1. **行为回归**：改 A 处时是否破坏了依赖 A 旧行为的 B 处？AI 不追踪全调用链，reviewer 要补查。
 2. **信任边界**：新代码是否假设输入来自可信源？外部输入（用户/API/DB 读出）是否验证后才用？
-3. **隐藏耦合**：是否新增了与现有抽象重复的能力？是否制造了第二份真值？
+3. **隐藏耦合**：是否新增了与现有抽象重复的能力？**是否制造了第二份真值？**
 4. **成本复杂度**：是否过度工程？单调用场景是否加了抽象层/retry/配置项？
 
+> 第 3 条的代价有实测：2026-07-27 的一次线上故障，根因就是同一个「空轮判定」在两个包里
+> 各存一份，两份悄悄漂移（一份把 reasoning 算作可见输出、一份不算），
+> 结果 CLI 侧把空轮判成「有输出」直接结束，网络级故障被伪装成「模型返回空内容」，
+> 排查方向被带偏了很久。**看到第二份真值就报，别当风格问题。**
+
 Cost-awareness：无明确推理需要却抬到高成本模型/多余编排时，可记 MEDIUM/LOW，勿升 CRITICAL。
+
+## 项目约定（有冲突时以仓库为准）
+
+- Coding style：小文件优先、immutable、边界校验（见 Cursor `coding-style` / Coding Style skill）
+- 推送/发布须用户明确批准；**reviewer 不建议「直接 push」**
+- 不把「缺 80% 覆盖率」当硬门；只报**本次引入的未测关键路径**
+- 匹配现有模式；拿不准时跟仓库其余代码走
 
 ## 输出格式
 
@@ -174,6 +224,8 @@ File: path/to/file.ts:42
 Issue: 具体问题描述
 Fix: 具体修复建议（代码级，不是高层建议）
 ```
+
+（只跑精简 pass 时用上面〈精简 pass〉的单行格式，不用这个。）
 
 ### 结尾必须带 Summary
 
