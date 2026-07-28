@@ -30,7 +30,15 @@ description: >
 
 **硬刹车**:声明"非平凡"后,实现类 task **必须派发执行者**(`nolo agent run`),不许规划者自己 edit 文件。唯一例外:微/最小出口、紧急解阻、或返工算账后自己修更便宜。绕过此条 = 严重违规。
 
-**通道唯一性(硬规则)**:review 任务同样必须通过 `nolo agent run` 派发 reviewer,不许规划者用内置 task 工具的子代理(如 scout)代替。内置子代理不是 nolo CLI 通道,绕过指派表 = 严重违规。read-only 调查/review 一律走 `nolo agent run --local`;宿主模型可用 ≠ nolo 执行通道可用。
+**review 派发通道**:review 任务通过 `nolo agent run` **或** 宿主内置 `callAgent` 工具派发 reviewer 均可。两条通道等价,按当轮环境选可用的:
+
+- **CLI 通道**:`nolo agent run <reviewer> --local --blocked-tool ...`(带 `--skill` 挂 `nolo-review`、`--blocked-tool` 硬约束写工具为 read-only)。
+- **内置通道**:`callAgent(agentKey=<reviewer agentKey 或角色别名>, task=<review spec>)`。平台对 `agentKey` 做角色别名兜底(如 `reviewer`),解析到可用的 review-capable agent;若解析到的模型与执行者同家族,需手动换一个不同家族的 agentKey。内置通道无 `--blocked-tool` 声明期硬门,改用 `task` 里显式写明"read-only,禁止改文件/跑写命令",并优先选本就无写工具的 agent。
+
+**仍生效的硬规则**(无论走哪条通道):
+- **换家族**:reviewer 不得是产出 diff 的同一个 agent,尽量换模型家族(执行者 glm → reviewer 用 deepseek/qwen/kimi 等)。
+- **read-only**:reviewer 不得修改被审文件。CLI 用 `--blocked-tool writeFile editFile applyEdit execShell`;内置通道在 `task` 里声明禁止写,并优先选无写工具的 agent。
+- **指派表优先**:有指派表时仍优先从表内选 reviewer;无表才 fallback `nolo agent list` 或内置 agent 列表。
 
 ## 最小实现护栏(实现类任务,含微改;动工前)
 
@@ -258,6 +266,8 @@ diff 的 reviewer **不得是产出该 diff 的同一个 agent**。执行者不�
 
 ### 派发命令
 
+**CLI 通道**:
+
 ```bash
 nolo agent run <reviewer> \
   --blocked-tool writeFile --blocked-tool editFile --blocked-tool applyEdit --blocked-tool execShell \
@@ -265,8 +275,20 @@ nolo agent run <reviewer> \
   --msg-file <review-spec.md> --local --bg --timeout-ms <按档位>
 ```
 
-挂了 `nolo-review` 之后,**spec 只写任务特定内容**(diff、角色、检查范围、背景),
-不要手动摘录规则。
+**内置通道**(宿主提供 `callAgent` 工具时):
+
+```
+callAgent(
+  agentKey = <reviewer 的 agentKey,或角色别名 "reviewer">,
+  task = <review spec,含 diff/角色/检查范围/背景;
+         末尾加"read-only:禁止修改文件、禁止跑写命令">,
+  background = <长任务 true,短 review false>
+)
+```
+
+挂了 `nolo-review`(CLI 的 `--skill`)或在 spec 里声明 review 规则(内置通道无 `--skill` 挂载机制,
+需在 `task` 里说明"按 nolo-review skill 规则产出 finding 或 Clean review")之后,**spec 只写任务特定
+内容**(diff、角色、检查范围、背景),不要手动摘录规则。
 
 ### 角色选配(中/大档,按 diff 涉及面选 1-5 个)
 
