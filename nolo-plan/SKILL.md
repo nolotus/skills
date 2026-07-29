@@ -78,8 +78,10 @@ nolo table list --purpose agent-dispatch --json
 **表存耐久事实,易变状态靠探(硬规则)**:指派表只记几周到几个月才变一次的东西——rank(智商档)、model、recommendedFor、notes(性格缺陷+解药)。**额度、限流、暂停、"本周可用"这类易变状态一律不入表**,派发前用一次探活拿当轮真值:
 
 ```bash
-nolo agent run --agent <agentKey> --msg "只回复 PONG" --local --timeout-ms 100000
+nolo agent run --agent <agentKey> --msg "只回复 PONG" --local --ephemeral --timeout-ms 100000
 ```
+
+**探活必须 `--ephemeral`(硬规则)**:探活对话与消息只留在进程内存,不写 LevelDB、不同步远端(`packages/cli/agentRunArgs.ts`,`--memory-only` 是同义别名)。不带该参数时每次探活都会在用户对话历史里落一条持久化的 "PONG" 会话——既污染对话列表,又会通过侧边栏「收藏的 agent 的会话」推导混进「我的收藏」。实测踩坑(2026-07-29):用户侧边栏收藏块里出现多条 PONG,全部是历次探活留下的。派发执行者同理:凡是不产出用户可见价值的 run(探活、窄探针、烟测),一律 `--ephemeral`;只有需要保留对话/产物的 run 才持久化。
 
 理由:任何叫「current X」却靠人手维护的字段都必然腐烂,而且腐烂时**看起来仍然权威**。实测踩坑(2026-07-20):某行的 `currentUsage` 停留在 8 天前的「暂停:周额度耗尽 HTTP429」——那条备注自己就写着「下周重置后恢复」,重置日早已过去,规划者却据此避开了该 agent,把两个大任务都派给了标着「暂停」的那一个,同时完全无视表里标着「应优先派」的另一个。一次 2 秒的探活就能得到 ground truth,而那个字段还因为不在表的列定义里而**根本无法通过 CLI 更新**,注定持续过期。
 
@@ -218,7 +220,7 @@ nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
 - **上下文隔离**:task prompt 必须自包含(文件路径 + 验收标准 + 必要背景),不传聊天历史。省钱且防污染。大上下文用 `--msg-file` 传文件路径。
 - **并行**:能拆就拆,能并就并。plan 把独立文件树拆成无文件重叠的并行 wave,同一 wave 一次全部派出(`--bg`),禁止串行干等。共享热路径(全局 store 一类)不拆给两个 agent 同时改,按包路径切分。
 - **失败契约**:executor 必须报具体 blocker(缺什么文件/权限/信息),禁止静默失败或泛泛"不确定"。
-- 改动多文件时优先隔离 worktree,避免并行 task 互踩。
+- **worktree 隔离(并行必选)**:并行改代码必须 `git worktree add <dir> -b <branch>` 建独立目录,不允许在同一工作目录里用 `git switch`/`git checkout` 切分支代替——同目录共享 `.git/HEAD`,一个终端切分支,另一个终端的文件写入会静默落到新分支上。主 checkout(`alpha`)保持不动,worktree 用完 `git worktree remove` 清理。
 - **技能挂载**:
   - 任务涉及前端改善/修改/新做 UI 时,派发命令必须带 `--skill page-0e95801d90-01KX89SZ3450YH5R4RG0KP0AES`(ui-design-guidelines,存于 nolo 数据,本地无副本)
   - 任务涉及编码/实现/修 bug/refactor/写测/改代码时,派发命令必须带 `--skill page-0e95801d90-01SK00000001SACHDK`(Coding Style,存于 nolo 数据);可与前端 skill 叠加
