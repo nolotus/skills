@@ -3,7 +3,7 @@ name: nolo-review
 description: >
   Reviewer 侧规则载荷：审查流程、Finding 质量门、假阳性清单、角色检查项、
   精简(YAGNI)pass、AI 生成代码关注点、输出格式与 Verdict 标准。
-  用法是被挂载——规划者派 reviewer 时 `--skill` 挂上本文件，reviewer 自动拿到全部规则，
+  用法是被挂载——规划者派 reviewer 时把本文件规则带进 task（宿主 `startAgentRun`/`callAgent` 或 CLI `--skill`），reviewer 自动拿到全部规则，
   spec 只写任务特定内容（diff、角色、检查范围）。触发词：review 代码、审查 diff、
   reviewer、finding、假阳性、严重度、精简 pass、YAGNI pass、Verdict。
   规划者派发前读取本文件的 Review Dispatch Contract；reviewer 不自行选择审查者或派发任务。
@@ -15,7 +15,7 @@ description: >
 **你是 reviewer。** 本文件是你这一轮的全部规则；spec 只补任务特定内容。
 
 **你不派发、不做候选选择、不改文件。** 只审 spec 给你的 diff，产出 finding 或 `Clean review`。
-规划者从 `nolo agent list` 选择 reviewer；本文件的 Review Dispatch Contract 是规划者的唯一 review 编排依据。
+规划者用宿主 `listAgents`（或 `nolo agent list`）选择 reviewer；本文件的 Review Dispatch Contract 是规划者的唯一 review 编排依据。
 
 ## Review Dispatch Contract（规划者派发前读取）
 
@@ -24,7 +24,7 @@ description: >
 ### 选择与数量
 
 - reviewer 不得是产出该 diff 的同一个 agent；规划者亲自实现的 diff 也必须交给另一个 reviewer。
-- 从 `nolo agent list --json --safe` 选择 reviewer：先过滤不可用/不具备必要工具面的候选，再在胜任候选中优先用户收藏；有合适候选时尽量换模型家族。
+- 从宿主 `listAgents`（或 `nolo agent list --json --safe`）选择 reviewer：先过滤不可用/不具备必要工具面的候选，再在胜任候选中优先用户收藏；有合适候选时尽量换模型家族。
 - 小任务（单 task、最多 3 个文件）：至少 1 个非作者 reviewer。
 - 中任务（多 task、跨模块或行为变化）：至少 1 个非作者 reviewer，尽量使用不同模型家族。
 - 大任务（架构、计费、安全、数据、发布或高并发路径）：至少 2 个不同家族 reviewer 并行，并保留 owner 的最终确认。
@@ -35,7 +35,7 @@ description: >
 
 reviewer 不得修改被审文件、切分支、回滚其他 agent 的改动或运行会写入工作区/远端的命令。不要用 `--blocked-tool` 整体禁掉 shell 或文件工具：review 需要通过 `git diff`、`git status`、搜索和上下文读取取得证据，粗粒度禁用会让 reviewer 无法完成审查。
 
-CLI 派发时保留正常 workspace 工具，在 task 中明确要求 read-only：
+派发时保留正常 workspace 工具，在 task 中明确要求 read-only。宿主默认用 `startAgentRun` 派发（把 nolo-review 规则要点写进 task，或要求 reviewer 先 `loadSkill("nolo-review")`）；宿主工具不可用时用 CLI：
 
 ```bash
 nolo agent run <reviewer> \
