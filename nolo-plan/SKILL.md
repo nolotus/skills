@@ -1,10 +1,10 @@
 ---
 name: nolo-plan
 description: >
-  nolo 平台编排方法：计划先行 → nolo agent list 读取收藏、简介、能力和成本 → 并行派发 →
+  nolo 平台编排方法：计划先行 → 用宿主 listAgents（或 nolo agent list）读取收藏、简介、能力和成本 → 并行派发 →
   跨模型 review；兼最小实现护栏（YAGNI、实现阶梯、隐性假设预检）——**动工前**的决策部分。
-  适用于任何装了 nolo CLI 的编码 agent。触发词：子代理、并行执行、派发 task、多 agent review、
-  plan 然后执行、稳定写代码、nolo agent run、最简单方案、最小实现、YAGNI、over-engineering、
+  适用于任何装了 nolo CLI 或宿主提供编排工具的编码 agent。触发词：子代理、并行执行、派发 task、多 agent review、
+  plan 然后执行、稳定写代码、startAgentRun、nolo agent run、最简单方案、最小实现、YAGNI、over-engineering、
   bloat、boilerplate、能删除什么、压复杂度。双出口：微/最小改动做完护栏后就地完成；非平凡任务
   继续 plan→派发→review。纯问答不进实现工作流。Do NOT use as a substitute for security review、
   correctness verification, or data integrity checks；review 规则统一见 `nolo-review`，commit/push
@@ -18,7 +18,7 @@ description: >
 > 负责 reviewer 的全部审查规则、finding 质量门、角色检查、精简 pass 和输出 Verdict。
 > 不在两个 skill 里复制 review 规则。
 
-默认通过 nolo CLI 派发执行者，用收藏偏好和代码维护的能力数据缩小候选，再用当轮探活确认可用性。
+默认通过宿主编排工具（listAgents / startAgentRun / controlAgentRun / callAgent）派发执行者；宿主工具不可用时降级到 nolo CLI（`nolo agent list` / `nolo agent run`）。两者共用同一套 agent 目录与 run 存储（~/.nolo/runs），runId 互通。用收藏偏好和代码维护的能力数据缩小候选，再用当轮探活确认可用性。
 收藏是用户的长期偏好，不是绕过任务兼容性、权限或运行时可用性的硬覆盖。
 
 ## 强制门（规划者每个任务第一句）
@@ -26,11 +26,11 @@ description: >
 规划者开始回复时必须同时完成两件事：
 
 1. **声明出口**：微/最小（护栏后就地完成）、非平凡（完整 plan→派发→review）或纯问答（不进实现流），并给一句理由。
-2. **声明通道**：非平凡任务在同一句话里说明将从 `nolo agent list` 读取候选；不要查表、不要凭记忆硬编码 agentKey。
+2. **声明通道**：非平凡任务在同一句话里说明将从宿主 `listAgents`（或 `nolo agent list`）读取候选；不要查表、不要凭记忆硬编码 agentKey。
 
 出口只按预计步数判定：预计需要 3 步或以上（含读改验、多文件改动或任何派发）就是非平凡；仅 2 步以内的机械改动才可走微/最小出口。
 
-**硬刹车**：非平凡任务完成 plan 后，默认必须通过 `nolo agent run` 派发实现 task；只有微/最小改动、紧急解阻，或返工沟通成本明确高于自己修复成本时，规划者才可就地实现，并写出例外理由。
+**硬刹车**：非平凡任务完成 plan 后，默认必须通过宿主 `startAgentRun`（或 `nolo agent run`）派发实现 task；只有微/最小改动、紧急解阻，或返工沟通成本明确高于自己修复成本时，规划者才可就地实现，并写出例外理由。
 
 ## 最小实现护栏（实现类任务，含微改；动工前）
 
@@ -50,21 +50,16 @@ description: >
 
 ### 读取当前列表
 
-先确认 CLI 存在：
+非平凡任务优先用宿主 `listAgents` 读取安全摘要（结构化返回，与 CLI 同一数据源）；宿主工具不可用时降级到 CLI：
 
 ```bash
 which nolo
-```
-
-非平凡任务随后读取安全摘要：
-
-```bash
 nolo agent list --json --safe
 ```
 
 `--safe` 不可用时，最多降级一次到 `nolo agent list --json`；不得再引入静态选人清单或本地硬编码名单。CLI 安装、认证和参数细节由 `nolo-cli` skill 负责。
 
-派发时使用列表返回的稳定 `id` 或 `handle`（以当前 CLI 接受的标识为准），不要用展示名称猜 agentKey，也不要把 `publicKey` 当成 CLI 参数，除非该命令明确接受它。
+派发时使用列表返回的稳定 `id`（宿主 `listAgents` 与 `nolo agent list` 返回同源 `id`，如 `01KYKNY0D2V4BA10EJ3QEYZ6KG`），不要用展示名称猜 agentKey，也不要把 `publicKey` 当成派发参数，除非命令明确接受它。宿主 `listAgents` 说明中提到的 `readAgent` 用于解析完整 agentKey；实测宿主 `startAgentRun` 直接用列表 `id` 即可派发成功。
 
 ### 选择顺序
 
@@ -81,7 +76,7 @@ nolo agent list --json --safe
 nolo agent run --agent <agentKey> --msg "只回复 PONG" --local --ephemeral --timeout-ms 100000
 ```
 
-探活必须 `--ephemeral`，避免把 PONG 写进用户历史、收藏会话或 LevelDB。任何不产出用户价值的探针、烟测和准入检查都使用该参数；真实任务才持久化。
+探活必须 `--ephemeral`（CLI）或使用宿主短任务通道（如 `callAgent`，<100s 同步拿结果），避免把 PONG 写进用户历史、收藏会话或 LevelDB。任何不产出用户价值的探针、烟测和准入检查都使用该参数；真实任务才持久化。
 
 ### 工具匹配规则
 
@@ -143,13 +138,13 @@ plan 是文件或等价的可追踪记录，至少包含：
 
 ## 第 2 步：派发
 
-plan 写完后，按选定 agent 派发实现 task：
+plan 写完后，按选定 agent 派发实现 task。宿主提供 `startAgentRun` 时默认用它（后台启动、返回 runId，用 `controlAgentRun` 观察/叫停；需要 <100s 同步结果时用 `callAgent`）；宿主工具不可用时用 CLI：
 
 ```bash
 nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --timeout-ms <按复杂度>
 ```
 
-task prompt 必须自包含，不传聊天历史；大上下文用 `--msg-file`。能拆就拆，互不依赖的文件树并行派发；共享热路径按包路径切分，不让两个 agent 同时改同一文件。
+宿主 `startAgentRun` 与 CLI 派发共用同一 run 存储（~/.nolo/runs），runId 格式互通，`controlAgentRun` 可观察任一通道派发的 run。task prompt 必须自包含，不传聊天历史；大上下文用 `--msg-file`（宿主 `startAgentRun` 对应 `input` 参数）。能拆就拆，互不依赖的文件树并行派发；共享热路径按包路径切分，不让两个 agent 同时改同一文件。
 
 并行改代码必须使用独立 worktree：
 
@@ -190,7 +185,7 @@ nolo agent logs <runId> --tail 50
 3. 挂载 `nolo-review`，并在 task 中按其 dispatch contract 明确 read-only 行为约束；不要粗粒度禁掉 reviewer 获取 diff 和上下文所需的工具。
 4. 根据 `nolo-review` 的结果决定返工、收尾或升级；reviewer 的检查项、严重度、精简 pass、输出格式和 Verdict 全部以 `nolo-review` 为唯一真源。
 
-CLI 派发形态：
+派发形态（宿主工具默认）：`startAgentRun` 派发 reviewer 并挂载 `nolo-review`；若宿主提供 `callAgent` 也可用内置同步通道。宿主工具不可用时用 CLI：
 
 ```bash
 nolo agent run <reviewer> \
@@ -198,7 +193,7 @@ nolo agent run <reviewer> \
   --msg-file <review-spec.md> --local --bg --timeout-ms <按范围>
 ```
 
-若宿主提供 `callAgent`，也可用内置通道；task 中只写 diff/角色/范围/背景，并指明按 `nolo-review` 规则 read-only review。不要在 plan 中再次摘录 review 规则。
+task 中只写 diff/角色/范围/背景，并指明按 `nolo-review` 规则 read-only review。不要在 plan 中再次摘录 review 规则。
 
 返工前算“继续沟通/等待”与“自己接手修复”的成本；第一轮就交付垃圾可以直接收回，连续返工仍不满足就停止追加沟通或升级给用户。review 的重试、证据和完成判定按 `nolo-review` contract 执行。
 
