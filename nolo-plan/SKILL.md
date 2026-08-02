@@ -144,7 +144,7 @@ plan 写完后，按选定 agent 派发实现 task。宿主提供 `startAgentRun
 nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --timeout-ms <按复杂度>
 ```
 
-宿主 `startAgentRun` 与 CLI 派发共用同一 run 存储（~/.nolo/runs），runId 格式互通，`controlAgentRun` 可观察任一通道派发的 run。task prompt 必须自包含，不传聊天历史；大上下文用 `--msg-file`（宿主 `startAgentRun` 对应 `input` 参数）。能拆就拆，互不依赖的文件树并行派发；共享热路径按包路径切分，不让两个 agent 同时改同一文件。
+宿主 `startAgentRun` 与 CLI 派发共用同一 run 存储（~/.nolo/runs），runId 格式互通，`controlAgentRun` 可观察任一通道派发的 run。task prompt 必须自包含，不传聊天历史；宿主 `startAgentRun` 的 `task` 参数承载子任务描述（对应 CLI `--msg-file` 的职责），`input` 只放附加数据（如抓取到的原始内容）。能拆就拆，互不依赖的文件树并行派发；共享热路径按包路径切分，不让两个 agent 同时改同一文件。
 
 并行改代码必须使用独立 worktree：
 
@@ -164,7 +164,7 @@ git worktree add <dir> -b <branch>
 | 语义重写、一个长文件、2–5 文件实现 | 600000 | `--bg` |
 | 跨模块或多 task | 900000 | `--bg`，必要时拆分 |
 
-每条后台 run 都记录 runId，并通过控制面查看进度：
+每条后台 run 都记录 runId，并通过控制面查看进度。宿主默认用 `controlAgentRun`（action: list / status，可带 tailLines 看日志）；宿主工具不可用时用 CLI：
 
 ```bash
 nolo agent ps --json
@@ -185,7 +185,7 @@ nolo agent logs <runId> --tail 50
 3. 挂载 `nolo-review`，并在 task 中按其 dispatch contract 明确 read-only 行为约束；不要粗粒度禁掉 reviewer 获取 diff 和上下文所需的工具。
 4. 根据 `nolo-review` 的结果决定返工、收尾或升级；reviewer 的检查项、严重度、精简 pass、输出格式和 Verdict 全部以 `nolo-review` 为唯一真源。
 
-派发形态（宿主工具默认）：`startAgentRun` 派发 reviewer 并挂载 `nolo-review`；若宿主提供 `callAgent` 也可用内置同步通道。宿主工具不可用时用 CLI：
+派发形态（宿主工具默认）：`startAgentRun` 派发 reviewer，并把 nolo-review 的规则放进 `task` 描述（如「按 nolo-review 规则审查以下 diff…」+ 规则要点或要求 reviewer 先 loadSkill("nolo-review")）；若宿主提供 `callAgent` 也可用内置同步通道。宿主工具不可用时用 CLI（`--skill` 挂载）：
 
 ```bash
 nolo agent run <reviewer> \
