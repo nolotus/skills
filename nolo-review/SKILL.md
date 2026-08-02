@@ -6,16 +6,50 @@ description: >
   用法是被挂载——规划者派 reviewer 时 `--skill` 挂上本文件，reviewer 自动拿到全部规则，
   spec 只写任务特定内容（diff、角色、检查范围）。触发词：review 代码、审查 diff、
   reviewer、finding、假阳性、严重度、精简 pass、YAGNI pass、Verdict。
-  Do NOT use for 决定派谁审/派几个（那是 nolo-plan 第 3 步的编排规则）、
-  写实现本身（nolo-plan）、commit/push 规则（nolo-commit）。
+  规划者派发前读取本文件的 Review Dispatch Contract；reviewer 不自行选择审查者或派发任务。
+  Do NOT use for 写实现本身（nolo-plan）、commit/push 规则（nolo-commit）。
 ---
 
 # Nolo Review（reviewer 侧）
 
 **你是 reviewer。** 本文件是你这一轮的全部规则；spec 只补任务特定内容。
 
-**你不派发、不查指派表、不改文件。** 只审 spec 给你的 diff，产出 finding 或 `Clean review`。
-派谁来审、派几个、怎么加 `--blocked-tool`——那是规划者的事，写在 `nolo-plan` 第 3 步，与你无关。
+**你不派发、不做候选选择、不改文件。** 只审 spec 给你的 diff，产出 finding 或 `Clean review`。
+规划者从 `nolo agent list` 选择 reviewer；本文件的 Review Dispatch Contract 是规划者的唯一 review 编排依据。
+
+## Review Dispatch Contract（规划者派发前读取）
+
+这一节是 review 的编排接口，避免 `nolo-plan` 再维护一套重复规则。规划者负责选择和派发；reviewer 只执行下面的 read-only 审查。
+
+### 选择与数量
+
+- reviewer 不得是产出该 diff 的同一个 agent；规划者亲自实现的 diff 也必须交给另一个 reviewer。
+- 从 `nolo agent list --json --safe` 选择 reviewer：先过滤不可用/不具备必要工具面的候选，再在胜任候选中优先用户收藏；有合适候选时尽量换模型家族。
+- 小任务（单 task、最多 3 个文件）：至少 1 个非作者 reviewer。
+- 中任务（多 task、跨模块或行为变化）：至少 1 个非作者 reviewer，尽量使用不同模型家族。
+- 大任务（架构、计费、安全、数据、发布或高并发路径）：至少 2 个不同家族 reviewer 并行，并保留 owner 的最终确认。
+
+“收藏优先”是偏好，不得覆盖任务兼容性、权限、运行时可用性或作者回避规则。
+
+### read-only 行为约束
+
+reviewer 不得修改被审文件、切分支、回滚其他 agent 的改动或运行会写入工作区/远端的命令。不要用 `--blocked-tool` 整体禁掉 shell 或文件工具：review 需要通过 `git diff`、`git status`、搜索和上下文读取取得证据，粗粒度禁用会让 reviewer 无法完成审查。
+
+CLI 派发时保留正常 workspace 工具，在 task 中明确要求 read-only：
+
+```bash
+nolo agent run <reviewer> \
+  --skill <nolo-review 的 SKILL.md 路径或 dbKey> \
+  --msg-file <review-spec.md> --local --bg --timeout-ms <按范围>
+```
+
+允许 reviewer 运行只读 Git/shell 命令以及不会修改被审源码的检查。若 reviewer 违反约束产生文件改动，规划者把该 review 视为无效并停止 run；不得自动回滚，因为工作树可能包含用户或并行会话的改动。
+
+### spec 与完成条件
+
+规划者只把任务特定的 diff、背景、检查范围、验收证据和角色写进 spec；规则由本文件提供，不要复制进 prompt。
+
+只有带实际检查证据的 findings 或 `Clean review` 才算完成。空响应、只说“我先检查”和 timeout 都不是 review 证据；最多换更小 prompt 或不同 provider 重试一次，仍无有效结论就标记 `external review incomplete`，交由 owner 处理，禁止无限换 agent。
 
 ## 流程
 

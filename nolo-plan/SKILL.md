@@ -1,361 +1,213 @@
 ---
 name: nolo-plan
 description: >
-  nolo 平台编排方法：计划先行 → nolo CLI 查指派表选执行者 → 并行派发 → 跨模型 review；
-  兼最小实现护栏（YAGNI、实现阶梯、隐性假设预检）——**动工前**的决策部分。适用于任何装了
-  nolo CLI 的编码 agent。触发词：子代理、并行执行、派发 task、多 agent review、plan 然后执行、
-  稳定写代码、nolo agent run、最简单方案、最小实现、YAGNI、over-engineering、bloat、
-  boilerplate、能删除什么、压复杂度。双出口：微/最小改动做完护栏后就地完成；非平凡任务
-  继续 plan→派发→review。纯问答不进实现工作流。Do NOT use as a substitute for security
-  review、correctness verification, or data integrity checks；review 规则与**产出后**的
-  精简 pass 见 `nolo-review`，commit/push 规则见 `nolo-commit`。
-  本 skill 以软链挂载到 CLI skill 目录,真源唯一保留在源仓库;改源即生效,无副本漂移。
+  nolo 平台编排方法：计划先行 → nolo agent list 读取收藏、简介、能力和成本 → 并行派发 →
+  跨模型 review；兼最小实现护栏（YAGNI、实现阶梯、隐性假设预检）——**动工前**的决策部分。
+  适用于任何装了 nolo CLI 的编码 agent。触发词：子代理、并行执行、派发 task、多 agent review、
+  plan 然后执行、稳定写代码、nolo agent run、最简单方案、最小实现、YAGNI、over-engineering、
+  bloat、boilerplate、能删除什么、压复杂度。双出口：微/最小改动做完护栏后就地完成；非平凡任务
+  继续 plan→派发→review。纯问答不进实现工作流。Do NOT use as a substitute for security review、
+  correctness verification, or data integrity checks；review 规则统一见 `nolo-review`，commit/push
+  规则见 `nolo-commit`。
+  本 skill 以软链挂载到 CLI skill 目录，真源唯一保留在源仓库；改源即生效，无副本漂移。
 ---
 
 # Nolo Plan → Dispatch → Review
 
-> **分发策略**：默认**软链挂载**。真源在 `skills/nolo-plan/`（或 `~/skills/nolo-plan/`）；
-> 各 CLI skill 目录用 `ln -s` 指向真源：`ln -sf ~/skills/nolo-plan ~/.codex/skills/nolo-plan`（先删旧副本目录）。
-> 用 `multi-cli-sync` 时把 `nolo-plan` 放进 `PERSONAL_EXCLUDE_SKILLS`：sync 跳过自动安装并清理目标目录里的独立副本,软链不受影响。
+> **职责边界**：本 skill 负责动工前的判断、任务拆分、执行者编排和 review 派发；`nolo-review`
+> 负责 reviewer 的全部审查规则、finding 质量门、角色检查、精简 pass 和输出 Verdict。
+> 不在两个 skill 里复制 review 规则。
 
-融合**计划先行**(先想清楚再动手)、**最小实现**(能删不加)、**极简输出**(只说结果)。通过 nolo CLI 派发执行者，用便宜模型和并行把代码写得又快又稳。
+默认通过 nolo CLI 派发执行者，用收藏偏好和代码维护的能力数据缩小候选，再用当轮探活确认可用性。
+收藏是用户的长期偏好，不是绕过任务兼容性、权限或运行时可用性的硬覆盖。
 
-## 强制门(规划者每个任务第一句,不可跳过)
+## 强制门（规划者每个任务第一句）
 
-规划者开始回复时**必须同时完成两件事**,缺一即违规:
+规划者开始回复时必须同时完成两件事：
 
-1. **声明出口**:微/最小(护栏后就地完成) / 非平凡(完整 plan→派发→review) / 纯问答(不进实现流)。一句理由。
-   **出口判定用步数,不用主观「大小」**:预计 ≥3 步的操作(含读改验、多文件改动、任何派发)= 非平凡;仅 2 步以内的机械改动 = 微/最小。不同宿主模型对「非平凡」的解释差异极大,只有数值阈值能让触发一致。
-2. **选通道**:非平凡时,**同一句话里报出执行通道**——先 `nolo table list --purpose agent-dispatch` 查指派表,只从表内选执行者;无表才 fallback `nolo agent list`(见第 0 步)。没装 nolo CLI → 走 setup 引导,不要跳过,不要降级到宿主子代理或自己动手。
+1. **声明出口**：微/最小（护栏后就地完成）、非平凡（完整 plan→派发→review）或纯问答（不进实现流），并给一句理由。
+2. **声明通道**：非平凡任务在同一句话里说明将从 `nolo agent list` 读取候选；不要查表、不要凭记忆硬编码 agentKey。
 
-**硬刹车**:声明"非平凡"后,实现类 task **必须派发执行者**(`nolo agent run`),不许规划者自己 edit 文件。唯一例外:微/最小出口、紧急解阻、或返工算账后自己修更便宜。绕过此条 = 严重违规。
+出口只按预计步数判定：预计需要 3 步或以上（含读改验、多文件改动或任何派发）就是非平凡；仅 2 步以内的机械改动才可走微/最小出口。
 
-**review 派发通道**:review 任务通过 `nolo agent run` **或** 宿主内置 `callAgent` 工具派发 reviewer 均可。两条通道等价,按当轮环境选可用的:
+**硬刹车**：非平凡任务完成 plan 后，默认必须通过 `nolo agent run` 派发实现 task；只有微/最小改动、紧急解阻，或返工沟通成本明确高于自己修复成本时，规划者才可就地实现，并写出例外理由。
 
-- **CLI 通道**:`nolo agent run <reviewer> --local --blocked-tool ...`(带 `--skill` 挂 `nolo-review`、`--blocked-tool` 硬约束写工具为 read-only)。
-- **内置通道**:`callAgent(agentKey=<reviewer agentKey 或角色别名>, task=<review spec>)`。平台对 `agentKey` 做角色别名兜底(如 `reviewer`),解析到可用的 review-capable agent;若解析到的模型与执行者同家族,需手动换一个不同家族的 agentKey。内置通道无 `--blocked-tool` 声明期硬门,改用 `task` 里显式写明"read-only,禁止改文件/跑写命令",并优先选本就无写工具的 agent。
+## 最小实现护栏（实现类任务，含微改；动工前）
 
-**仍生效的硬规则**(无论走哪条通道):
-- **换家族**:reviewer 不得是产出 diff 的同一个 agent,尽量换模型家族(执行者 glm → reviewer 用 deepseek/qwen/kimi 等)。
-- **read-only**:reviewer 不得修改被审文件。CLI 用 `--blocked-tool writeFile editFile applyEdit execShell`;内置通道在 `task` 里声明禁止写,并优先选无写工具的 agent。
-- **指派表优先**:有指派表时仍优先从表内选 reviewer;无表才 fallback `nolo agent list` 或内置 agent 列表。
+### 隐性假设预检
 
-## 最小实现护栏(实现类任务,含微改;动工前)
+先确认交付物是演示还是真用户产物、谁维护、从哪个入口改、谁是权威真值，以及捷径会先破坏哪个真实用户动作。检查是否会 hard-code、shadow、复制或缓存第二份真值。
 
-**隐性假设预检**(推理即可;有风险才说):交付物是演示还是真用户产物?谁维护、从哪入口改?权威真值是什么——会不会 hard-code/shadow/复制/缓存第二份真值?捷径会先坏掉哪个真实用户动作?有维护/所有权风险时围绕真实工作流重设计或先确认取舍。
+### 实现阶梯
 
-**阶梯**(第一条成立就停):需求是否该存在 → 能删解决吗 → 标准库 → 平台能力(浏览器/CSS/DB/shell/OS) → 已有依赖 → 现有项目抽象 → 最后才写最小正确 diff。
+按顺序检查，第一条成立就停：需求是否该存在 → 能删解决吗 → 标准库 → 平台能力（浏览器/CSS/DB/shell/OS）→ 已有依赖 → 现有项目抽象 → 最后才写最小正确 diff。
 
-**search-first**(与上阶梯配套):动手写新 helper/抽象/加依赖前,先按 `search-first` skill 搜仓库与现有依赖;能复用就不新造。完整流程见同级 skill `search-first`(软链挂载,真源 `~/skills/search-first`)。纯机械改动与用户已点名文件的任务可跳过。
+动手写新 helper、抽象或加依赖前，先按 `search-first` skill 搜仓库和现有依赖；纯机械改动与用户已点名文件的任务可以跳过。
 
-**永不简化掉**:信任边界校验、数据完整性、可访问性基础、发布/回滚语义、必要证据;不新增 helper/route/config/依赖/抽象,除非现有路径明确扛不住。
+不得为了省代码删掉信任边界校验、数据完整性、可访问性基础、发布/回滚语义或必要证据。能不加 helper、route、config、依赖和抽象就不加。
 
-**双出口**:微/最小 → 护栏通过后窄改+聚焦验证,停在这里;非平凡 → 护栏结论写入 plan,继续第 0–3 步;纯问答 → 不进实现流。
+## 第 0 步：从 agent list 发现执行者
 
-## 第 0 步:发现执行者(仅规划者)
+### 读取当前列表
 
-### 前置:nolo CLI 可用性
-
-`which nolo` 不存在 → 走 setup 引导(见 `references/setup.md`),不要跳过。nolo 是唯一执行通道,没装就不能派发。
-
-### 查指派表(硬规则:指派表优先,先查表再谈执行者)
-
-指派表是**用户精选**的执行者名单(purpose=`agent-dispatch` 的 nolo table,列:agentKey / rank / model / recommendedFor / notes)。用户建了表就代表他已经做过选型决策,**规划者不得用自己的判断覆盖它**。
-
-**派发前的第一条命令必须是查表,不是列 agent**:
+先确认 CLI 存在：
 
 ```bash
-nolo table list --purpose agent-dispatch --json
+which nolo
 ```
 
-- **有表** → `nolo table query --table <dbKey> --json` 查行,**只能从表内行里选**执行者,按 rank 选档(见下方智商档位表)。表里带智力排序、用途、性格档案,是**选型**真值(可用性另行探活),优先级高于 `nolo agent list` 的全量列表、高于规划者对模型的个人偏好、也高于任何硬编码默认 agent。
-- **没表** → 才允许 `nolo agent list --json` fallback 全量列表(无 rank/用途),选最便宜可胜任的,并**当轮就引导用户建指派表**(见 `references/setup.md`)。
+非平凡任务随后读取安全摘要：
 
-**禁止**:跳过 `nolo table list` 直接 `nolo agent list`;表里已有可胜任行却去表外挑 agent;凭记忆里的 agentKey 派发而不查当轮表(rank/名单会变)。
+```bash
+nolo agent list --json --safe
+```
 
-**声明义务**:派发时一句话报出走的是哪条路径与命中行——「指派表命中 `<agentKey>` rank<N>」或「无指派表,fallback `nolo agent list` 选 `<agentKey>`,建议建表」。表内无人可胜任(recommendedFor 明显不覆盖、或探活全失败)时,先说明再 fallback,不要静默绕过。
+`--safe` 不可用时，最多降级一次到 `nolo agent list --json`；不得再引入静态选人清单或本地硬编码名单。CLI 安装、认证和参数细节由 `nolo-cli` skill 负责。
 
-**表存耐久事实,易变状态靠探(硬规则)**:指派表只记几周到几个月才变一次的东西——rank(智商档)、model、recommendedFor、notes(性格缺陷+解药)。**额度、限流、暂停、"本周可用"这类易变状态一律不入表**,派发前用一次探活拿当轮真值:
+派发时使用列表返回的稳定 `id` 或 `handle`（以当前 CLI 接受的标识为准），不要用展示名称猜 agentKey，也不要把 `publicKey` 当成 CLI 参数，除非该命令明确接受它。
+
+### 选择顺序
+
+对列表中的候选按下面顺序处理：
+
+1. **过滤不可用候选**：排除孤立记录、缺少必需 provider/模型的记录，以及与任务权限或特定工具明显不兼容的记录。
+2. **收藏优先**：在仍然胜任任务的候选中，优先 `isFavorite: true`，同组按 `favoritedAt` 的最近程度作为偏好信号。
+3. **读取简介**：从 `introduction` 判断任务用途、稳定限制和适用场景。用途说明先放在 introduction 里即可，不要求新增 `recommendedFor` 字段；如果以后需要这个概念，先继续写进 introduction。
+4. **读取代码维护的能力表**：比较 `modelAbility.passAt1`、`modelAbility.benchmarkScore` 等已提供值。缺失值代表未知，不要根据模型名字臆造分数或 rank。
+5. **比较成本与供给方**：使用列表中的 `inputPrice`、`outputPrice`、provider 和 apiSource；`null` 是未知，不当成免费。用户没有要求更强能力时，在胜任候选中优先低成本。
+6. **最后探活**：对准备派发的候选做一次短探活；失败就换下一个同等胜任候选。
 
 ```bash
 nolo agent run --agent <agentKey> --msg "只回复 PONG" --local --ephemeral --timeout-ms 100000
 ```
 
-**探活必须 `--ephemeral`(硬规则)**:探活对话与消息只留在进程内存,不写 LevelDB、不同步远端(`packages/cli/agentRunArgs.ts`,`--memory-only` 是同义别名)。不带该参数时每次探活都会在用户对话历史里落一条持久化的 "PONG" 会话——既污染对话列表,又会通过侧边栏「收藏的 agent 的会话」推导混进「我的收藏」。实测踩坑(2026-07-29):用户侧边栏收藏块里出现多条 PONG,全部是历次探活留下的。派发执行者同理:凡是不产出用户可见价值的 run(探活、窄探针、烟测),一律 `--ephemeral`;只有需要保留对话/产物的 run 才持久化。
+探活必须 `--ephemeral`，避免把 PONG 写进用户历史、收藏会话或 LevelDB。任何不产出用户价值的探针、烟测和准入检查都使用该参数；真实任务才持久化。
 
-理由:任何叫「current X」却靠人手维护的字段都必然腐烂,而且腐烂时**看起来仍然权威**。实测踩坑(2026-07-20):某行的 `currentUsage` 停留在 8 天前的「暂停:周额度耗尽 HTTP429」——那条备注自己就写着「下周重置后恢复」,重置日早已过去,规划者却据此避开了该 agent,把两个大任务都派给了标着「暂停」的那一个,同时完全无视表里标着「应优先派」的另一个。一次 2 秒的探活就能得到 ground truth,而那个字段还因为不在表的列定义里而**根本无法通过 CLI 更新**,注定持续过期。
+### 工具匹配规则
 
-同理:探活失败也不要写回表,那是当轮 runtime 事实,按 `controller_prompt` / `runtime` / `model` 三分类处理(见下方性格档案与失败写回)。
+`coding` 视为默认能力：CLI、桌面以及常规 web/RN 编码任务，不因为 tools 摘要为空就判定 agent 不能 coding。tools 只用于判断特定工具任务，例如浏览器控制、图片生成、表格写入、邮件发送或数据库操作；特定工具缺失时才淘汰候选。
 
-### 智商档位选择
+不要把“模型能力”和“工具能力”混成一个分数：模型能力看 `modelAbility`，任务工具看 tools，运行时可用性看探活。
 
-查到指派表后,按任务复杂度选 rank 档:
+### 时间与价格策略
 
-| 智商档 | rank | 适合任务 | 例子 |
-|---|---|---|---|
-| 最低 | 4+ | 机械改动、收集、跑命令 | grep 调用点、改常量、跑测试 |
-| 低 | 3 | 单文件实现、标准模式 | 加一个函数、改 CSS、写测试 |
-| 中 | 2 | 多文件实现、需要设计判断 | 新模块、跨文件重构、API 改动 |
-| 高 | 1 | 架构决策、高风险路径、难 task | 核心算法、安全边界、性能关键 |
-| review | 换家族 | 跨模型 diff 审查 | 用与执行者不同家族的 agent |
+峰谷价格、北京时间窗口、额度和 provider 限流属于产品代码的动态路由层，不在这个 skill 里维护第二份价目表。若 CLI 或执行器暴露了当前 effective cost/provider policy，规划时使用它；否则只使用本次 agent list 的价格摘要，不硬编码某个 provider 的时间规则。
 
-**原则**:用能胜任的最低档。低档省钱省时间,高档留给硬骨头。探活失败的跳过,换同档下一个。
+### 选人声明与配置核对
 
-### 按智商档位调整 spec 详细度(硬要求)
+派发时简短说明：`agent list` 选中了哪个 agent、是否因用户收藏优先、简介/能力/成本的主要依据是什么。不要再说“静态名单命中”或建议用户维护额外清单。
 
-不同模型的智商与习惯不同,给的约束和上下文详细度必须不同。派发前对照:
+新建或刚修改过 agent 时，派发前用 `nolo agent read <agent>` 复核实际生效的 model/provider；不要假设创建命令里的参数就是最终配置。
 
-| 档位 | spec 必须包含 | 禁止 |
-|---|---|---|
-| rank4(机械) | 命令级指令、文件清单、逐条验收;可大范围但路径明确 | 语义模糊的目标("优化一下") |
-| rank3(低) | 文件清单 + **已定的结论/方案** + 验收;范围小 | 任何开放式判断、"自行探索确认" |
-| rank2(中) | 目标 + 排查起点 + 验收;可含设计判断但要给边界 | 无边界的"整个包重构" |
-| rank1(高) | 目标 + 约束 + 风险提示即可 | 过度约束限制其判断 |
+失败、超时和额度耗尽是当轮 runtime 事实，不写回 introduction、modelAbility 或任何隐式“推荐”字段。只有用户明确要求，才更新 agent 的简介或提示词；稳定的模型能力数据由代码/基准维护。
 
-**规划者自检**:写完 spec 搜一遍「自行/确认/判断/决定/选择」——若出现且执行者 ≤rank3,先自己把这一步做掉(或先派一个 rank2 出结论)。低档执行者拿到开放式判断题的典型结局是长时间探索、零编辑、超时。
+## 任务复杂度与 brief 预算
 
-**验收基线必须先跑再写(硬要求)**:spec 里凡是给出「基线 N pass / M fail」这类数字,规划者**必须先亲自跑一次那条完全相同的命令**,把当轮真实数字抄进去。禁止凭记忆、凭早先别的范围(单包 vs 合并多包)的结果、或凭上一轮 session 的印象填写。数字对不上时执行者无法判断失败是不是自己引入的,典型结局是反复重跑同一条命令空转到超时——这类 stall 归因是 `controller_prompt`,不是模型缺陷,**不得写回指派表污染 agent 档案**。
-
-**回归测试必须反向验证(硬要求)**:任何声称「覆盖了某个 bug」的新测试,交付前必须把修复临时去掉跑一次——**测试必须变红**,装回再跑必须变绿。只跑「加了修复后是绿的」证明不了任何事:测试可能根本没走到差异分支。实测踩坑(2026-07-20):一条为 CJK 列宽 bug 写的回归测试,去掉修复照样通过,因为用例的 ASCII 前缀已经长到触发旧逻辑,压根没进新分支;换成「码元数不超标但列宽超标」的用例后才真正生效。这条对规划者自己写的测试同样适用,不只针对执行者。
-
-**并发工作区优先用确定性判据**:工作区有其他会话在写时,跨包合并测试的数字会持续漂移,不能作为验收依据。改用不受并发影响的判据:残留符号 grep 为空、目标文件存在/旧文件已删、只跑真正受影响的最小测试集、typecheck 排除在途文件后计数不增加。把「不要跑哪些命令」也写进 spec,并说明原因,否则执行者会出于谨慎自行扩大验证范围。同理,**spec 必须显式列出哪些文件属于并行会话的在途改动、绝对不能碰**,并要求执行者改完用 `git status --short` 自查。只写「只改你负责的文件」不够——执行者无法区分工作区里的脏文件谁是谁的。实测(2026-07-20):未列禁区的两轮派发各卷入一次无关文件,列了禁区的一轮两个执行者都守住了。
-
-### 探索深度与档位成反比(编译器模型)
-
-规划者智商是系统里最贵的资源;正确用法不是啥都派高档执行者,而是把智商「编译」成目标档位能执行的指令。**派得越低,规划者先探索得越深**:
-
-- 派 rank4 → 探索到**命令/行级**(改哪个文件哪几行、验收命令)
-- 派 rank3 → 探索到**结论级**(方案已定、文件清单齐)
-- 派 rank2 → 探索到**边界级**(排查起点 + 禁区)
-- 派 rank1 → 只给目标与约束
-
-探索深度看任务的**判断密度**,不是代码量:大范围机械活不需要深探索;小改动但要选方案的活必须先把方案定死。判断标尺:预估「返工一次的成本」vs「多探索 10 分钟的成本」,取便宜的。
-
-### Task 面预算(派发前硬门)
-
-选模型和 timeout 前先评估四个维度,不能再用「文件数」代替复杂度:
+不要用文件数量代替复杂度，至少评估四个维度：
 
 | 维度 | 低 | 高 |
 |---|---|---|
-| 判断密度 | 结论已定,机械执行 | 要决定保留/删除/迁移/架构边界 |
-| 上下文面 | 目标文件+一个参考 | 完整 plan+多个权威源+历史/测试 |
-| 输出耦合 | 一个主产物 | source+router+mirror+tests+plan 状态互相约束 |
-| patch 面 | 局部替换 | 大段语义重写或跨多个维护入口 |
+| 判断密度 | 结论已定、机械执行 | 需要决定保留/删除/迁移/边界 |
+| 上下文面 | 目标文件加一个参考 | 多个权威源、历史和测试 |
+| 输出耦合 | 一个主产物 | source、router、mirror、tests 互相约束 |
+| patch 面 | 局部替换 | 大段语义重写或跨模块改动 |
 
-任一维度高就不是 rank4 机械吞吐任务。高判断密度的文档/skill 重构与代码架构任务同档处理;「只是 Markdown」「只有一个文件」都不是降档理由。
+一个执行 task 只允许一个主交付物，外加最多一个不可分割的验证。不要把“读完整 plan、探索多个来源、同时改 source/router/mirror/tests、跑全量验证”塞进一个 brief。
 
-**Task brief 预算**:一个执行 task 只允许一个主交付物,外加最多一个不可分割的伴随验证。禁止把「读完整 plan → 自行探索多个来源 → 同时改 source/router/mirror/tests → 跑全量验证 → 更新 plan」包装成一个 task。plan 仍是长期真值,但 dispatch brief 只摘录当前 task 的已定结论、目标文件、禁区和验收;除非 task 本身是 plan review,不要要求执行者读完整 plan。
+执行者能力未知或较弱时，规划者先把方案编译成更具体的 brief：
 
-**语义重写分阶段**:规划者先确定 keep/move/delete 映射与目标结构 → task A 只改权威 source → task B 同步 mirrors/adjacent pointers → task C 更新行为测试。测试依赖 source 时不得与 source 语义设计混成同一个执行 task。
+- 机械任务：给命令级指令、文件清单和逐条验收。
+- 常规实现：给已定结论、文件清单、边界和验收。
+- 设计任务：给目标、排查起点、禁区和风险，让高能力 agent 判断细节。
 
-### 性格档案与失败写回(硬规则)
+写完 spec 后搜索“自行/确认/判断/决定/选择”等开放式词；若任务交给较弱候选，先由规划者把关键结论定下来。
 
-- 指派表除智商档外必须记**性格缺陷 + 解药**(如:某模型探索黑洞→spec 给结论;某模型语义弱→验收写成可机检命令;某模型空响应→自动降级)。
-- 每次返工/停杀/失败先分类:`controller_prompt`(任务面/spec 有问题)、`runtime`(OAuth/connector/CLI/timeout)、`model`(在正确 bounded brief 与可用 runtime 下仍判断或交付失败)。观察可以写进任务记录;只有证据隔离到 `model` 时才把性格缺陷写回指派表,禁止用坏 prompt 污染 agent 档案。
-- 衡量执行者「能不能用」的唯一 KPI 是**一次交付率**(带着当前 spec 模板一次通过验收的比率),不是模型名气。
-- **教训回灌到执行者提示词(不只写指派表)**:证据隔离到 `model` 的缺陷,除写回指派表外,还要写进该 agent 自己的 system prompt(`nolo agent update <agent> --prompt-file <path>`)。两者管的事不同——指派表约束「派不派它」,提示词约束「它怎么干活」;只写表,下次照样派给它、照样犯同一个错。提示词里留一个「实测教训」区按时间倒序累积,**正反面都记**:失败写清现象 + 为什么算失败 + 具体要求;做对的也要记,否则只剩惩罚项会把模型压成过度保守。回灌内容必须是 review 复核过的事实,不是印象。
+### 验收基线与回归测试
 
-### 速度优先与额度维护
+spec 中出现“基线 N pass / M fail”时，规划者必须先亲自跑完全相同的命令并填入当轮真实数字，不得凭记忆。新回归测试声称覆盖 bug 时，修复临时去掉必须变红，装回后再跑必须变绿；只证明“修复后为绿”不够。
 
-- 选定 rank 档后,同档(或同等胜任)的多个 agent 里优先选实测更快且可用的,不要死绑某一 handle。**智商档 ≠ 速度档**:高智商模型的大块执行吞吐未必更快。
-- 派发前读指派表 `notes`/`recommendedFor` 判断适配度,再用一次探活确认当轮可用;探活失败的跳过,换同档下一个。可用性不查表(见上方「表存耐久事实,易变状态靠探」)。
-- 额度耗尽/runtime 挂是**当轮事实,不写回表**——下个 session 探活自会发现,写进去只会变成过期的权威。只有确认是该 agent 的稳定特性(而非一时额度)时,才作为性格缺陷写进 `notes`。
-- **宿主模型 ≠ nolo 执行通道**:当前对话宿主可用只说明规划者可用;派执行者仍要可用的 `nolo agent run --local` agentKey。
-- **分清计费口径**:指派表 `costModel` 要区分**订阅额度**(用完即停,如 ollama/antigravity 的周额度与 5h 额度)与**平台计费**(按量,不因额度耗尽中断)。两者失败模式不同:前者派发前必须查额度,后者要控成本。同 provider 的多个 agent 可能共用同一份订阅额度——表里看着两个可用执行者,实际是一个池子,其中一个跑爆另一个也用不了。平台默认已指向托管 provider,agent 无需再自带 `customProviderUrl`;自带会绕开平台计费改走订阅额度。
-- **派发前核对执行者实际生效配置**:新建或改过 agent 后,用 `nolo agent read <agent>` 复核 model / provider 的**生效值**,不要假设创建命令里传的参数就是最终配置(部分参数会互相覆盖,例如从别的 agent 复制 provider 时可能连模型一起带过来)。派错模型会让整条归因错位——你以为在评估 A 的能力,实际跑的是 B,写回指派表和提示词的结论也跟着错。
+并发工作区下测试数字可能漂移。优先使用残留符号 grep、文件存在/删除、受影响的最小测试集和不受并发影响的判据；spec 明确列出并行会话的禁区文件，执行后用 `git status --short` 自查。
 
-### 超时档位
+## 第 1 步：写 plan（非微/最小出口必做）
 
-派发时必须设 `--timeout-ms`,按任务复杂度选档:
+plan 是文件或等价的可追踪记录，至少包含：
 
-| 档 | 任务 | timeout | 模式 |
-|---|---|---|---|
-| 快 | 结论已定的机械小改、窄探针 | 300000 (5min) | 前台 |
-| 中 | 语义重写、一个长文件、或 2-5 文件实现 | 600000 (10min) | `--bg` 后台 |
-| 大 | 跨模块、多 task | 900000 (15min) | `--bg` 后台,或拆分 |
+1. 目标与非目标。
+2. 每个 task 的目标、文件路径、权威真值、禁区和验收标准。
+3. 依赖关系与并行 wave；互不依赖的 task 放同一 wave。
+4. 从本次 `agent list` 选人的依据、执行通道和 timeout。
+5. 验证命令、预期证据、风险、回滚方式和已知阻塞。
+6. review handoff：diff 范围、需要的角色或风险面、以及挂载 `nolo-review` 的方式。具体 review 规则只引用 `nolo-review`，不要复制到 plan。
 
-单文件不自动等于快任务;超过约 200 行的语义重写默认至少中档。超时 ≠ 失败——执行者可能在读文件、生成长 patch 或跑测试。优先用 `--bg` 后台派发,不阻塞规划者。
+写 task 前先查目标现状；执行者会忠实执行 spec，把猜测写成指令会直接注入 bug。
 
-### 可靠 stall audit(禁止只看 0 edit)
+## 第 2 步：派发
 
-`fileEdits=0` 只说明尚未落盘,不等于无进展。停杀前必须:
-
-1. 连续两次 probe,间隔 60-90 秒,对比 `lastEventAt`、`llmCalls`、`toolCalls`、log tail 与 `git diff`。
-2. 检查 `inFlight`;近期仍有 LLM/tool 事件时按活跃生成处理,不要因为长 patch 尚未返回就停。
-3. 只有 counters、日志和 diff 在两次 probe 间都无变化,或已到硬 timeout 且无产物,才判定 stall。
-4. 发 stop 前后各查一次 `git diff`/`fileEdits`;若停止边界刚落下 patch,从现有 diff 继续,不得报告「0 edit」或无条件重开覆盖。
-5. **区分「执行者在干活」与「执行者被自己的产物卡住」**:看最后一个工具调用的耗时,不只看是否还有活动。实测(2026-07-20):执行者写了一条会无限循环的测试,`execShell bun test ...` 单条跑了 1583202ms(26 分钟),它把超时误读成「没有输出详情」,正准备加 verbose 再跑一遍——counters 一直在动,按前四条判不出 stall,但它已经陷进去了。单条工具调用耗时远超同类命令的正常量级时,直接看它在跑什么。
-
-到 timeout 但持续有活动时,让 run 自然结束或用更长档位重新派发;不要在原 timeout 一半时凭感觉停杀。
-
-### 进度可见(硬规则)
-
-Owner 必须能不靠问规划者就知道进度;规划者禁止只靠聊天复述。每条 `--bg` 派发都记下 `runId`,验收前用控制面轮询而不是干等:
+plan 写完后，按选定 agent 派发实现 task：
 
 ```bash
-nolo agent ps --json                                # 全部 run
-nolo agent status <runId> --json | --watch          # 单条状态/盯到结束
-nolo agent logs <runId> [--tail 50]                 # 细节
-nolo agent stop <runId> / kill <runId>              # SIGTERM / SIGKILL
+nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --timeout-ms <按复杂度>
 ```
 
-向用户汇报时带 runId、agentKey、status 和验收证据。长时间无进展(按上面 stall audit 判定)→ `stop` → 拆小或换通道重派,禁止干等问人。
+task prompt 必须自包含，不传聊天历史；大上下文用 `--msg-file`。能拆就拆，互不依赖的文件树并行派发；共享热路径按包路径切分，不让两个 agent 同时改同一文件。
 
-## 第 1 步:计划(非微/最小出口必做)
+并行改代码必须使用独立 worktree：
 
-微/最小出口:护栏通过后直接做(典型:≤2 文件机械改动)。其余先写 plan(文件,不是聊天),必含五项:
-
-1. **Task 列表**:每个 task 自包含——目标、涉及文件路径、验收标准。**写 task 描述前先查目标现状**:executor 会忠实执行你的猜测,把猜测写成指令等于亲手注入 bug
-2. **并行分组**:互不依赖的 task 标成一组,同时派发
-3. **执行通道**:每个 task 按复杂度选智商档,从指派表按 rank 匹配(档位表见第 0 步)
-4. **Review 策略**:见第 3 步分档
-5. **验收证据**:什么产物算完成(diff、测试输出、截图)
-
-计划本身遵循上方最小实现阶梯与预检;把阶梯停点与真值/维护约束写进 task 边界。
-
-## 第 2 步:派发(仅规划者)
-
-**硬规则:plan 写完 → 实现类 task 必须派发,不许规划者自己 edit。** 强制门的刹车在这里生效。微/最小出口/紧急解阻/返工算账后自己修更便宜 = 唯一三种例外,需一句理由;例外情形下规划者自己写的 diff 仍受第 3 步「作者回避」约束,必须派另一个 agent review。
-
-- **上下文隔离**:task prompt 必须自包含(文件路径 + 验收标准 + 必要背景),不传聊天历史。省钱且防污染。大上下文用 `--msg-file` 传文件路径。
-- **并行**:能拆就拆,能并就并。plan 把独立文件树拆成无文件重叠的并行 wave,同一 wave 一次全部派出(`--bg`),禁止串行干等。共享热路径(全局 store 一类)不拆给两个 agent 同时改,按包路径切分。
-- **失败契约**:executor 必须报具体 blocker(缺什么文件/权限/信息),禁止静默失败或泛泛"不确定"。
-- **worktree 隔离(并行必选)**:并行改代码必须 `git worktree add <dir> -b <branch>` 建独立目录,不允许在同一工作目录里用 `git switch`/`git checkout` 切分支代替——同目录共享 `.git/HEAD`,一个终端切分支,另一个终端的文件写入会静默落到新分支上。主 checkout(`alpha`)保持不动,worktree 用完 `git worktree remove` 清理。
-- **技能挂载**:
-  - 任务涉及前端改善/修改/新做 UI 时,派发命令必须带 `--skill page-0e95801d90-01KX89SZ3450YH5R4RG0KP0AES`(ui-design-guidelines,存于 nolo 数据,本地无副本)
-  - 任务涉及编码/实现/修 bug/refactor/写测/改代码时,派发命令必须带 `--skill page-0e95801d90-01SK00000001SACHDK`(Coding Style,存于 nolo 数据);可与前端 skill 叠加
-  - 任务涉及共享客户端状态/按钮联动/store 重构(Redux 剥离、dialog/composer/quick-chat 等)时,加挂 `--skill ~/skills/click-path-audit/SKILL.md`(或 softlink 后的 click-path-audit);spec 必须限定审计范围(单触点/单表面/单 store)
-  - 可叠加多个 `--skill <dbKey|md路径>` 挂其他技能。
-
-派发命令:
 ```bash
-nolo agent run <agentKey> --msg-file <task-spec.md> --local --cwd <path> --bg --timeout-ms <按档位>
+git worktree add <dir> -b <branch>
 ```
 
-## 第 3 步:Review(规划者编排)
+不允许在同一工作目录用 `git switch`/`git checkout` 切分支代替 worktree。主 checkout 保持不动，完成后按项目规则清理 worktree。
 
-**边界**:本节是**编排**——决定派谁审、派几个、怎么派。reviewer 自己那套规则
-(审查流程、Finding 质量门、假阳性清单、角色检查项、精简 pass 细则、输出格式与 Verdict)
-在 `nolo-review` skill 里,派发时用 `--skill` 挂给 reviewer 即可,**本文件不复述、也不要
-把本节内容塞进 reviewer 的上下文**——那会让它以为自己也要派发。
+编码/修 bug/refactor/写测试任务挂载项目 Coding Style skill；前端 UI 任务同时挂载 UI guidelines；共享客户端状态或按钮联动任务再挂载 `click-path-audit`，并把审计范围限定到单触点、单表面或单 store。coding 工具本身不作为 CLI/桌面任务的额外准入门槛。
 
-不同模型训练数据不同、盲区不同——尽量换家族派 reviewer。
+### timeout 与进度
 
-### 作者回避(硬规则,任何档位)
+| 任务 | timeout | 模式 |
+|---|---:|---|
+| 结论已定的机械小改、窄探针 | 300000 | 前台或短任务 |
+| 语义重写、一个长文件、2–5 文件实现 | 600000 | `--bg` |
+| 跨模块或多 task | 900000 | `--bg`，必要时拆分 |
 
-diff 的 reviewer **不得是产出该 diff 的同一个 agent**。执行者不得自审自己写的代码;
-规划者走豁免亲自实现的改动,同样必须派另一个 agent(尽量换家族)review。
-**自审 = 该 review 无效,按未 review 处理。**
+每条后台 run 都记录 runId，并通过控制面查看进度：
 
-### 按复杂度分档
+```bash
+nolo agent ps --json
+nolo agent status <runId> --json
+nolo agent logs <runId> --tail 50
+```
 
-| 档 | 判定 | Review |
-|---|---|---|
-| 小 | 单 task、≤3 文件 | 派发者(非作者)review 执行者的 diff |
-| 中 | 多 task 或跨模块 | +1 个不同模型 reviewer |
-| 大 | 架构改动、高风险路径 | 2+ 个不同家族 reviewer 并行 |
+`fileEdits=0` 不等于没有进展。停杀前连续两次 probe，间隔 60–90 秒，对比 `lastEventAt`、`llmCalls`、`toolCalls`、日志和 diff；单个工具调用远超同类命令的正常耗时，优先检查它是否被自己的产物卡住。只有 counters、日志和 diff 都没有变化，或硬 timeout 且无产物，才判定 stall。
 
-### reviewer 硬性 read-only(硬规则)
+失败先分为 `controller_prompt`（spec/任务面问题）、`runtime`（OAuth、connector、CLI、timeout）或 `model`（正确 brief 和 runtime 下仍交付失败）。按分类修 spec、换通道或换候选，不要把一次 runtime 失败写成 agent 的永久性能力结论。
 
-用 `--blocked-tool` 在**声明期**禁掉写/执行类工具,不靠 prompt 劝说「别改东西」。
-不同模型对 prompt 约束的遵守程度差异极大,只有声明期硬门能保证一致——模型无法调用
-不在工具集里的工具。这是 `resolveAgentRunToolSurface` 的声明期过滤,不是运行时拦截。
-与 `--allowed-tool` 白名单叠加时先白名单留、再黑名单删。
+## 第 3 步：Review 编排
 
-实测代价(2026-07-27):一次并行派发中,未加 `--blocked-tool` 的执行者对 spec 明令
-「不要碰」的目录跑了 `git checkout --`,把另一个执行者已落盘的改动整体抹掉。
-同一个 agent 在后续 review 任务里加了 `--blocked-tool` 后没再出问题。
+非平凡实现交付后进入独立 review 门。规划者只负责：
 
-### 派发命令
+1. 读取 `nolo-review` 的 Review Dispatch Contract，按其规则从 `agent list` 选择 reviewer。
+2. 给 reviewer 任务特定的 diff、背景、检查范围和验收证据。
+3. 挂载 `nolo-review`，并在 task 中按其 dispatch contract 明确 read-only 行为约束；不要粗粒度禁掉 reviewer 获取 diff 和上下文所需的工具。
+4. 根据 `nolo-review` 的结果决定返工、收尾或升级；reviewer 的检查项、严重度、精简 pass、输出格式和 Verdict 全部以 `nolo-review` 为唯一真源。
 
-**CLI 通道**:
+CLI 派发形态：
 
 ```bash
 nolo agent run <reviewer> \
-  --blocked-tool writeFile --blocked-tool editFile --blocked-tool applyEdit --blocked-tool execShell \
   --skill <nolo-review 的 SKILL.md 路径或 dbKey> \
-  --msg-file <review-spec.md> --local --bg --timeout-ms <按档位>
+  --msg-file <review-spec.md> --local --bg --timeout-ms <按范围>
 ```
 
-**内置通道**(宿主提供 `callAgent` 工具时):
+若宿主提供 `callAgent`，也可用内置通道；task 中只写 diff/角色/范围/背景，并指明按 `nolo-review` 规则 read-only review。不要在 plan 中再次摘录 review 规则。
 
-```
-callAgent(
-  agentKey = <reviewer 的 agentKey,或角色别名 "reviewer">,
-  task = <review spec,含 diff/角色/检查范围/背景;
-         末尾加"read-only:禁止修改文件、禁止跑写命令">,
-  background = <长任务 true,短 review false>
-)
-```
+返工前算“继续沟通/等待”与“自己接手修复”的成本；第一轮就交付垃圾可以直接收回，连续返工仍不满足就停止追加沟通或升级给用户。review 的重试、证据和完成判定按 `nolo-review` contract 执行。
 
-挂了 `nolo-review`(CLI 的 `--skill`)或在 spec 里声明 review 规则(内置通道无 `--skill` 挂载机制,
-需在 `task` 里说明"按 nolo-review skill 规则产出 finding 或 Clean review")之后,**spec 只写任务特定
-内容**(diff、角色、检查范围、背景),不要手动摘录规则。
+## Commit 与边界
 
-### 角色选配(中/大档,按 diff 涉及面选 1-5 个)
+commit 的分组、`Assistant-Model` trailer、push/部署批准边界由 `nolo-commit` skill 定义；需要提交时先加载它。
 
-换家族隔离**训练**盲区,角色分工隔离**注意力**盲区,两者叠加。
-
-| 角色 | 适合的 diff |
-|---|---|
-| 安全审计员 | 新增 HTTP 路由、凭证处理、认证流程 |
-| 数据完整性审计员 | 同步逻辑、DB 写入、账号切换、删除路径 |
-| 架构审计员 | 新模块、跨包重构、API 改动 |
-| 用户体验审计员 | UI 流程、onboarding、表单交互 |
-| 静默失败猎手 | 异常处理、外部调用、DB 事务、后台任务 |
-
-派发时把角色写进 spec:「以{角色}视角审查以下 diff,只报告该视角内的问题」。
-各角色具体检查项在 `nolo-review` 里,规划者只需选角色。
-
-**注意力隔离(按模型档位)**:rank3-4(含 Flash 等便宜模型)严格一角色一 reviewer
-并行派发,不兼任;rank2 最多兼任 2 角色;rank1 可兼任 2-3 角色。
-模型越便宜,角色拆得越细,用并行换深度。
-
-### 精简 pass(何时派)
-
-用户要压复杂度/YAGNI、或 diff 明显臃肿时,在 spec 里写明「只跑精简 pass」。
-它与普通 review **正交**:正确性/安全/数据完整性走普通 review,不混进此 pass。
-tag 与输出格式在 `nolo-review` 里。
-
-> **与最小实现护栏的边界**:上方「最小实现护栏」是**动工前**的决策阶梯;
-> 精简 pass 是**产出后**对已有 diff 的审查,产物是 finding 列表。同一原则、两个时刻。
-
-### 返工由规划者算账,不设死上限
-
-每轮返工前评估「继续返工的沟通/等待成本」vs「自己接手修完」哪个便宜:
-第一轮就交垃圾 → 直接收回自己干,顺便记下该通道不适合这类 task;
-改了两三轮还不满足 → 停止追加沟通,自己收尾或升级给用户。
-唯一硬规则:**不允许无感知的无限循环**,每轮必须有这次算账。
-
-### Review 输出契约
-
-只有包含 findings 或 `Clean review` **且带实际检查证据**的文本才算完成。
-空响应、只说「我先检查」、timeout——都不算 review 证据。
-最多用更小 prompt 或不同 provider 重试 1 次;仍无有效结论就明确报告
-external review incomplete,转规划者/owner review,**禁止无限换 agent**。
-
-## Commit 纪律
-
-commit 的分组标准、必填的 AI 署名(`Assistant-Model` trailer)、push/部署的批准边界
-全部由 `nolo-commit` skill 定义,本文件不复述。要提交时先加载它。
-
-(bun-nolo 仓库内真源:`docs/skills/nolo-commit.md`;其他仓库按各自安装位置。)
-
-## 输出纪律
-
-对用户汇报只有三段:**结果**(一句话)→ **证据**(diff/测试/URL)→ **下一步**(如有)。不复述过程,不解释显然的事,失败就直说失败和原因。
-
-**废话纪律**(技术内容全留,只有废话死):
-
-- 删填充词(其实/基本上/只是/really/basically)、客套(当然!/很高兴帮你)、hedging(应该/大概/似乎——没验证就直说没验证)。
-- 不复述工具调用过程,不做装饰性表格/emoji。
-- 报错只引用**最短的决定性一行**,不倾倒长日志(用户要时除外)。
-- 不发明缩写(cfg/impl/req/fn):tokenizer 照样拆,一个 token 都省不了,读者还得解码;通用缩写(DB/API/HTTP)可用。技术术语、代码、命令、报错原文永远精确保留。
-- **恢复完整表达的场合**:安全警告、不可逆操作确认、顺序敏感的多步骤指令、压缩本身会造成歧义时。清楚说完再回到简洁。
-
-## 边界
-
-- 不替代宿主 CLI 的权限与安全规则
-- 不覆盖部署/发布(那是项目自己的流程)
-- 指派表是用户资产:默认只读;仅在 owner 提供证据(bench 结果/明确要求)或失败写回规则触发时,写回 `notes`/`recommendedFor`
-- nolo CLI 细节见 `nolo-cli` skill
+- 不替代宿主 CLI 的权限与安全规则。
+- 不覆盖部署/发布流程。
+- 不创建额外的持久选人清单；`agent list` 是候选来源，不把推荐逻辑复制到第二份文档。
+- 不自动修改 agent introduction、prompt 或能力数据；只在 owner 明确要求时执行 profile 更新。
+- nolo CLI 命令细节见 `nolo-cli` skill。
