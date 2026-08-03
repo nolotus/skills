@@ -154,11 +154,12 @@ Rules:
 - Include both what the skill does AND when to use it; all "when to use" info goes in the description, not the body
 - Be specific about trigger phrases (formal AND casual); mention file types, tools, or contexts
 - Use "pushy" phrasing ("Make sure to use this skill whenever...")
-- Include near-miss exclusions so the agent knows when NOT to use it
+- Put negative boundaries ("does NOT do X") in the body `## Boundaries` section, NOT in the description — the description is a discovery menu entry where every character should help the agent decide whether to load; negative scope costs context and rarely changes the load decision
 - Keep under 1024 characters; no angle brackets (`<` `>`)
 
 Bad: `"Helps with code review."`
-Good: `"Review code for bugs, style, and architecture. Make sure to use this skill whenever the user mentions 'review', 'code check', 'audit this', 'PR diff', or 'lint errors' — even if they don't explicitly say 'code review'. Do NOT use for writing new code from scratch."`
+Good: `"Review code for bugs, style, and architecture. Make sure to use this skill whenever the user mentions 'review', 'code check', 'audit this', 'PR diff', or 'lint errors' — even if they don't explicitly say 'code review'."`
+(The "Do NOT use for writing new code from scratch" boundary belongs in the body `## Boundaries` section, not the description — see below.)
 
 **Optional frontmatter fields** (design documentation only, no automated runner):
 
